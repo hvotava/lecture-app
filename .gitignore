@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# ZIP files
+*.zip 

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Lekce</h1>
+    <a href="{{ url_for('admin.new_lesson') }}" class="btn btn-primary">Nová lekce</a>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Název</th>
+                <th>Jazyk</th>
+                <th>Vytvořeno</th>
+                <th>Akce</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for lesson in lessons %}
+            <tr>
+                <td>{{ lesson.title }}</td>
+                <td>{{ lesson.language }}</td>
+                <td>{{ lesson.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>
+                    <a href="{{ url_for('admin.edit_lesson', id=lesson.id) }}" class="btn btn-sm btn-outline-primary">
+                        Upravit
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %} 

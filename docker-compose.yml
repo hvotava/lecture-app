@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - FLASK_APP=app.app:create_app()
+      - FLASK_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/lecture
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+    command: gunicorn --bind :8080 --workers 1 --threads 8 --timeout 0 --worker-class uvicorn.workers.UvicornWorker --reload app.app:create_app()
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=lecture
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data: 
