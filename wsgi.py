@@ -29,5 +29,9 @@ except Exception as e:
     logger.error(f"Traceback: {traceback.format_exc()}")
     raise
 
+# Gunicorn bude hledat proměnnou "app" v tomto souboru
+# SocketIO můžeš z Gunicornu spouštět s --worker-class gevent (viz Dockerfile)
+
 if __name__ == "__main__":
-    socketio.run(app, debug=False, host='0.0.0.0', port=8080) 
+    port = int(os.environ.get("PORT", 8080))  # Railway nastavuje PORT automaticky
+    socketio.run(app, debug=False, host="0.0.0.0", port=port)
