@@ -41,6 +41,14 @@ pg8000==1.30.5
 google-cloud-logging==3.9.0
 google-cloud-storage==2.14.0
 
+# Additional dependencies
+WTForms==3.1.1
+python-socketio==5.10.0
+python-engineio==4.8.0
+requirements-dev.txt (VÝVOJ a TESTY – používej jen lokálně)
+txt
+Zkopírovat
+Upravit
 # Testování
 pytest==8.0.2
 pytest-asyncio==0.23.5
@@ -50,8 +58,3 @@ pytest-cov==4.1.0
 black==24.1.1
 flake8==7.0.0
 mypy==1.8.0
-
-# Additional dependencies
-WTForms==3.1.1
-python-socketio==5.10.0
-python-engineio==4.8.0 
