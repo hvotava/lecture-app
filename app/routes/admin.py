@@ -448,4 +448,26 @@ def db_test():
     except Exception as e:
         results['lesson_table'] = f'CHYBA: {str(e)}'
     
+    return jsonify(results)
+
+@bp.route('/init-db')
+def init_db():
+    """Endpoint pro inicializaci databáze."""
+    results = {}
+    
+    try:
+        # Vytvoření všech tabulek
+        db.create_all()
+        results['create_tables'] = 'OK'
+    except Exception as e:
+        results['create_tables'] = f'CHYBA: {str(e)}'
+    
+    try:
+        # Kontrola tabulek
+        user_count = User.query.count()
+        lesson_count = Lesson.query.count()
+        results['tables_check'] = f'OK - {user_count} uživatelů, {lesson_count} lekcí'
+    except Exception as e:
+        results['tables_check'] = f'CHYBA: {str(e)}'
+    
     return jsonify(results) 
