@@ -1,5 +1,5 @@
-# Použijeme Python 3.9
-FROM python:3.9-slim
+# Použijeme Python 3.11 pro lepší kompatibilitu
+FROM python:3.11-slim
 
 # Nastavíme pracovní adresář
 WORKDIR /app
@@ -7,6 +7,7 @@ WORKDIR /app
 # Instalace systémových závislostí
 RUN apt-get update && apt-get install -y \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Zkopírujeme requirements.txt
@@ -23,10 +24,9 @@ ENV FLASK_APP=wsgi:app
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
 
-# Exponujeme port
-#ENV PORT=8080
+# Exponujeme port (Railway automaticky nastaví PORT proměnnou)
 EXPOSE 8080
 
-# Spustíme aplikaci s gevent pro lepší DNS podporu
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 --worker-class gevent wsgi:app
+# Spustíme aplikaci
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class gevent wsgi:app
 
