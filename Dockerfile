@@ -24,8 +24,9 @@ ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
 
 # Exponujeme port
-ENV PORT=8080
+#ENV PORT=8080
 EXPOSE 8080
 
 # Spustíme aplikaci s gevent pro lepší DNS podporu
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 --worker-class gevent wsgi:app 
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 --worker-class gevent wsgi:app
+

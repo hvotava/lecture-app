@@ -19,7 +19,7 @@ try:
     CORS_AVAILABLE = True
 except ImportError:
     CORS_AVAILABLE = False
-    
+
 try:
     from flask_migrate import Migrate
     MIGRATE_AVAILABLE = True
@@ -47,14 +47,12 @@ try:
     if (os.getenv('GAE_ENV') or 
         os.getenv('GOOGLE_CLOUD_PROJECT') or 
         os.path.exists('/opt/google-cloud-sdk')):
-        
         import google.cloud.logging
         client = google.cloud.logging.Client()
         client.setup_logging()
         logger.info("Google Cloud Logging byl úspěšně inicializován")
     else:
         logger.info("Google Cloud Logging není dostupný - používám standardní logování")
-        
 except Exception as e:
     logger.warning(f"Google Cloud Logging není dostupný: {str(e)}")
 
@@ -66,9 +64,9 @@ logging.getLogger('werkzeug').setLevel(logging.WARNING)
 def create_app() -> Flask:
     try:
         logger.info("Vytvářím Flask aplikaci")
-        
+
         app = Flask(__name__)
-        
+
         # Nastavení CORS
         if CORS_AVAILABLE:
             logger.info("Povoluji CORS")
@@ -82,34 +80,34 @@ def create_app() -> Flask:
                     "max_age": 600
                 }
             })
-        
+
         # Nastavení SECRET_KEY
         app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default-secret-key-for-development')
-        
+
         # Nastavení HTTPS pro URL generování
         app.config['PREFERRED_URL_SCHEME'] = 'https'
-        
+
         # Nastavení webhook URL
         app.config['WEBHOOK_BASE_URL'] = os.getenv('WEBHOOK_BASE_URL', 'https://lecture-app-296578790242.europe-west1.run.app')
         logger.info(f"Nastavena WEBHOOK_BASE_URL: {app.config['WEBHOOK_BASE_URL']}")
-        
+
         # Databázová konfigurace
         app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///voice_learning.db')
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        
+
         # Inicializace databáze
         logger.info("Inicializuji databázi")
         db.init_app(app)
-        
+
         # Inicializace migrací
         if MIGRATE_AVAILABLE:
             logger.info("Inicializuji migrace")
             migrate = Migrate(app, db)
-        
+
         # Nastavení CSRF ochrany
         logger.info("Inicializuji CSRF ochranu")
         csrf = CSRFProtect(app)
-        
+
         # Inicializace SocketIO
         if SOCKETIO_AVAILABLE:
             logger.info("Inicializuji SocketIO")
@@ -117,25 +115,28 @@ def create_app() -> Flask:
             app.socketio = socketio
         else:
             logger.warning("SocketIO není dostupné")
-        
+
         # Registrace blueprintů
         logger.info("Registruji blueprinty")
-        
-        # Import blueprintů
         from app.routes.admin import bp as admin_bp
         from app.routes.voice import voice_bp
-        
+
         app.register_blueprint(admin_bp, url_prefix='/')
         app.register_blueprint(voice_bp, url_prefix='/voice')
-        
+
         # CSRF konfigurace pro Twilio webhooky
         csrf.exempt(voice_bp)
-        
-        # Health check endpoint
+
+        # Health check endpoint (/health)
         @app.route('/health')
         def health_check():
             return jsonify({"status": "healthy", "message": "Aplikace běží správně"}), 200
-        
+
+        # Druhý Health check endpoint (/api/health) pro Railway nebo jiný hosting
+        @app.route('/api/health')
+        def api_health_check():
+            return jsonify({"status": "healthy", "message": "Aplikace běží správně"}), 200
+
         # Root endpoint
         @app.route('/')
         def index():
@@ -144,11 +145,12 @@ def create_app() -> Flask:
                 "status": "running",
                 "endpoints": {
                     "health": "/health",
+                    "api_health": "/api/health",
                     "admin": "/",
                     "voice": "/voice"
                 }
             }), 200
-        
+
         # Error handlers
         @app.errorhandler(500)
         def internal_error(error):
@@ -158,7 +160,7 @@ def create_app() -> Flask:
                 "error": "Internal Server Error",
                 "message": "Došlo k neočekávané chybě. Zkontrolujte logy pro více informací."
             }), 500
-        
+
         @app.errorhandler(404)
         def not_found_error(error):
             logger.warning(f"Not Found Error: {str(error)}")
@@ -166,7 +168,7 @@ def create_app() -> Flask:
                 "error": "Not Found",
                 "message": "Požadovaná stránka nebyla nalezena."
             }), 404
-        
+
         @app.errorhandler(Exception)
         def handle_exception(e):
             logger.error(f"Unhandled Exception: {str(e)}")
@@ -175,7 +177,7 @@ def create_app() -> Flask:
                 "error": "Internal Server Error",
                 "message": "Došlo k neočekávané chybě. Zkontrolujte logy pro více informací."
             }), 500
-        
+
         # Vytvoření tabulek v databázi
         with app.app_context():
             try:
@@ -184,11 +186,11 @@ def create_app() -> Flask:
                 logger.info("Databázové tabulky byly úspěšně vytvořeny")
             except Exception as e:
                 logger.error(f"Chyba při vytváření databázových tabulek: {str(e)}")
-        
+
         logger.info("Aplikace byla úspěšně vytvořena")
         return app
-        
+
     except Exception as e:
         logger.error(f"Chyba při vytváření aplikace: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        raise 
+        raise
