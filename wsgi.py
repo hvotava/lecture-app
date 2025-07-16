@@ -29,11 +29,16 @@ except Exception as e:
 # Pro Railway deployment - gunicorn bude používat 'app' objekt
 # Pro lokální vývoj můžeme použít socketio.run()
 if __name__ == "__main__":
+    # Railway automaticky nastaví PORT proměnnou
     port_env = os.environ.get("PORT", "8080")
+    logger.info(f"PORT proměnná: {port_env}")
+    
     try:
         # Zajistí, že port je číslo, i když někdo do env dá "$PORT" nebo prázdný string
         port = int(port_env)
-    except Exception:
+        logger.info(f"Používám port: {port}")
+    except (ValueError, TypeError):
         logger.warning(f"Neplatná proměnná PORT ('{port_env}'), používám port 8080.")
         port = 8080
+    
     socketio.run(app, debug=False, host="0.0.0.0", port=port)
