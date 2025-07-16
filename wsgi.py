@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 logger.info("=== WSGI.PY STARTUJE ===")
 logger.info(f"Python verze: {sys.version}")
 logger.info(f"Aktuální adresář: {os.getcwd()}")
-logger.info(f"Environment variables: {dict(os.environ)}")
+logger.info(f"PORT proměnná: {os.environ.get('PORT', 'NENASTAVEN')}")
 
 try:
     from app import create_app, socketio
@@ -26,9 +26,14 @@ try:
     logger.info("✅ WebSocket podpora povolena")
 
     # Test health check endpoint
-    with app.test_client() as client:
-        response = client.get('/health')
-        logger.info(f"✅ Health check test: {response.status_code}")
+    try:
+        with app.test_client() as client:
+            response = client.get('/health')
+            logger.info(f"✅ Health check test: {response.status_code}")
+            if response.status_code != 200:
+                logger.error(f"❌ Health check returned {response.status_code}")
+    except Exception as e:
+        logger.error(f"❌ Health check test failed: {e}")
 
 except Exception as e:
     logger.error(f"❌ Chyba při vytváření aplikace: {str(e)}")

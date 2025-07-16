@@ -28,5 +28,11 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 # Spustíme aplikaci s více logováním
-CMD python -c "import os; print(f'PORT: {os.environ.get(\"PORT\", \"NENASTAVEN\")}'); print(f'PWD: {os.getcwd()}'); print('Spouštím gunicorn...')" && gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class sync --log-level debug wsgi:app
+CMD echo "=== STARTING APPLICATION ===" && \
+    echo "PORT: $PORT" && \
+    echo "PWD: $(pwd)" && \
+    echo "Files in current directory:" && \
+    ls -la && \
+    echo "=== STARTING GUNICORN ===" && \
+    gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class sync --log-level debug --timeout 120 wsgi:app
 

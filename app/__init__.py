@@ -55,12 +55,22 @@ def create_app():
     # Health check endpoint
     @app.route('/health')
     def health():
-        return {'status': 'healthy', 'service': 'lecture-app'}, 200
+        try:
+            # Jednoduchý health check bez závislostí
+            return {'status': 'healthy', 'service': 'lecture-app', 'timestamp': '2024-01-01'}, 200
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return {'status': 'unhealthy', 'error': str(e)}, 500
     
     # API health check endpoint pro Railway
     @app.route('/api/health')
     def api_health():
-        return {'status': 'healthy', 'service': 'lecture-app', 'api': True}, 200
+        try:
+            # Jednoduchý health check bez závislostí
+            return {'status': 'healthy', 'service': 'lecture-app', 'api': True, 'timestamp': '2024-01-01'}, 200
+        except Exception as e:
+            logger.error(f"API health check failed: {e}")
+            return {'status': 'unhealthy', 'error': str(e)}, 500
     
     # Konfigurace logování
     if not app.debug:

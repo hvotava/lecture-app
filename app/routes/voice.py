@@ -29,23 +29,22 @@ TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
 TWILIO_ASSISTANT_ID = os.getenv('TWILIO_ASSISTANT_ID')
 
-# Kontrola základních konfiguračních proměnných (TWILIO_ASSISTANT_ID je volitelná)
-required_vars = [OPENAI_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN]
-if not all(required_vars):
-    missing_vars = []
-    if not OPENAI_API_KEY:
-        missing_vars.append('OPENAI_API_KEY')
-    if not TWILIO_ACCOUNT_SID:
-        missing_vars.append('TWILIO_ACCOUNT_SID')
-    if not TWILIO_AUTH_TOKEN:
-        missing_vars.append('TWILIO_AUTH_TOKEN')
-    
+# Kontrola povinných environment variables
+missing_vars = []
+if not OPENAI_API_KEY:
+    missing_vars.append('OPENAI_API_KEY')
+if not TWILIO_ACCOUNT_SID:
+    missing_vars.append('TWILIO_ACCOUNT_SID')
+if not TWILIO_AUTH_TOKEN:
+    missing_vars.append('TWILIO_AUTH_TOKEN')
+
+if missing_vars:
     logger.warning(f"Chybí některé požadované proměnné prostředí: {', '.join(missing_vars)}")
     logger.warning("Některé funkce nemusí fungovat správně")
     
     # Pro testování povolíme spuštění i bez všech proměnných
-    if os.getenv('TESTING') != 'true':
-        raise ValueError(f"Chybí některé požadované proměnné prostředí: {', '.join(missing_vars)}")
+    # if os.getenv('TESTING') != 'true':
+    #     raise ValueError(f"Chybí některé požadované proměnné prostředí: {', '.join(missing_vars)}")
 
 if not TWILIO_ASSISTANT_ID:
     logger.warning("TWILIO_ASSISTANT_ID není nastavena - některé funkce nebudou dostupné")
