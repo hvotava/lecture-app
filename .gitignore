@@ -11,4 +11,23 @@ env/
 .venv/
 
 # ZIP files
-*.zip 
+*.zip
+
+# macOS
+.DS_Store
+
+# Database files
+*.db
+instance/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Railway specific
+.railway/ 

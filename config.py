@@ -38,7 +38,9 @@ class Config:
     CORS_ORIGINS = [
         'https://lecture-app-296578790242.europe-west1.run.app',
         'https://lecture-synqflows.pythonanywhere.com',
-        'https://localhost:8080'
+        'https://localhost:8080',
+        'https://*.up.railway.app',  # Railway domény
+        'http://localhost:3000'      # Pro lokální vývoj
     ]
     
     # SSL/TLS nastavení není potřeba na PythonAnywhere

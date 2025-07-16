@@ -29,5 +29,8 @@ except Exception as e:
     logger.error(f"Traceback: {traceback.format_exc()}")
     raise
 
+# Pro Railway deployment - gunicorn bude používat 'app' objekt
+# Pro lokální vývoj můžeme použít socketio.run()
 if __name__ == "__main__":
-    socketio.run(app, debug=False, host='0.0.0.0', port=8080) 
+    port = int(os.environ.get('PORT', 8080))
+    socketio.run(app, debug=False, host='0.0.0.0', port=port) 

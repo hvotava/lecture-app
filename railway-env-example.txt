@@ -1,9 +1,13 @@
 # Environment variables pro Railway nasazení
 # Zkopírujte tyto proměnné do Railway dashboard -> Variables
 
+# Flask konfigurace
 FLASK_ENV=production
 FLASK_DEBUG=False
-SECRET_KEY=your_secret_key_here
+SECRET_KEY=your_very_secure_secret_key_here_minimum_32_chars
+
+# Port (Railway automaticky nastaví)
+PORT=8080
 
 # OpenAI API
 OPENAI_API_KEY=your_openai_api_key_here
@@ -11,6 +15,8 @@ OPENAI_API_KEY=your_openai_api_key_here
 # Twilio konfigurace
 TWILIO_ACCOUNT_SID=your_twilio_account_sid_here
 TWILIO_AUTH_TOKEN=your_twilio_auth_token_here
+TWILIO_PHONE_NUMBER=your_twilio_phone_number_here
+TWILIO_ASSISTANT_ID=your_twilio_assistant_id_here
 
 # Databáze (Railway automaticky poskytne PostgreSQL)
 DATABASE_URL=postgresql://user:password@host:port/database
@@ -18,5 +24,9 @@ DATABASE_URL=postgresql://user:password@host:port/database
 # Webhook URL (bude automaticky nastavena Railway)
 WEBHOOK_BASE_URL=https://your-app-name.up.railway.app
 
-# Volitelné
-TWILIO_ASSISTANT_ID=your_twilio_assistant_id_here 
+# Aplikační konfigurace
+WEBSOCKET_ENABLED=true
+LOG_LEVEL=INFO
+
+# Volitelné - pro lepší logování
+RAILWAY_ENVIRONMENT=production 
