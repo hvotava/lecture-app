@@ -85,7 +85,7 @@ async function generateQuestions() {
     }
     
     try {
-        const response = await fetch('/lessons/generate-questions', {
+        const response = await fetch('/admin/lessons/generate-questions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
