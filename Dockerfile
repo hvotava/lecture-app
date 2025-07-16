@@ -27,6 +27,6 @@ ENV PYTHONUNBUFFERED=1
 # Exponujeme port (Railway automaticky nastaví PORT proměnnou)
 EXPOSE 8080
 
-# Spustíme aplikaci
-CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class gevent wsgi:app
+# Spustíme aplikaci s více logováním
+CMD python -c "import os; print(f'PORT: {os.environ.get(\"PORT\", \"NENASTAVEN\")}'); print(f'PWD: {os.getcwd()}'); print('Spouštím gunicorn...')" && gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class gevent --log-level debug wsgi:app
 

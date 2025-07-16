@@ -57,6 +57,11 @@ def create_app():
     def health():
         return {'status': 'healthy', 'service': 'lecture-app'}, 200
     
+    # API health check endpoint pro Railway
+    @app.route('/api/health')
+    def api_health():
+        return {'status': 'healthy', 'service': 'lecture-app', 'api': True}, 200
+    
     # Konfigurace logování
     if not app.debug:
         logging.basicConfig(level=logging.INFO)

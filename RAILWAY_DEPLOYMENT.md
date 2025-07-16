@@ -54,7 +54,7 @@ Railway automaticky:
 1. **Zkopírujte URL vaší aplikace**
 2. **Aktualizujte `WEBHOOK_BASE_URL`** na skutečnou URL
 3. **Nastavte Twilio webhook** na `https://your-app.up.railway.app/voice`
-4. **Testujte health check** na `https://your-app.up.railway.app/health`
+4. **Testujte health check** na `https://your-app.up.railway.app/api/health`
 5. **Testujte aplikaci** zavoláním na Twilio číslo
 
 ## Monitoring
@@ -62,7 +62,7 @@ Railway automaticky:
 - Railway poskytuje automatické logy
 - Můžete sledovat metriky v dashboardu
 - Aplikace se automaticky restartuje při chybách
-- Health check endpoint: `/health`
+- Health check endpoint: `/api/health`
 
 ## Troubleshooting
 
@@ -100,7 +100,7 @@ Railway automaticky škáluje podle potřeby:
 
 Po úspěšném deploymentu testujte:
 
-1. **Health check**: `GET /health`
+1. **Health check**: `GET /api/health`
 2. **Twilio webhook**: `POST /voice`
 3. **WebSocket connection**: Pro real-time komunikaci
 4. **Database operations**: Vytvoření a čtení dat 
