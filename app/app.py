@@ -135,6 +135,12 @@ def create_app() -> Flask:
         @app.route('/health')
         def health_check():
             return jsonify({"status": "healthy", "message": "Aplikace běží správně"}), 200
+
+        # Health check endpoint pro /api/health (Railway požaduje právě tento endpoint!)
+@app.route('/api/health')
+def api_health_check():
+    return jsonify({"status": "healthy", "message": "Aplikace běží správně"}), 200
+
         
         # Root endpoint
         @app.route('/')
