@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import re
 from twilio.base.exceptions import TwilioRestException
 from app.database import db
+from sqlalchemy import text
 import logging
 import traceback
 import os
@@ -429,7 +430,7 @@ def db_test():
     
     try:
         # Test připojení k databázi
-        db.session.execute('SELECT 1')
+        db.session.execute(text('SELECT 1'))
         results['db_connection'] = 'OK'
     except Exception as e:
         results['db_connection'] = f'CHYBA: {str(e)}'
