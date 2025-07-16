@@ -29,3 +29,4 @@ EXPOSE 8080
 
 # Spustíme aplikaci s gevent pro lepší DNS podporu
 CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 --worker-class gevent wsgi:app
+
