@@ -52,6 +52,20 @@ def create_app():
     app.register_blueprint(voice_bp, url_prefix='/voice')
     app.register_blueprint(admin_bp, url_prefix='/admin')
     
+    # Root endpoint
+    @app.route('/')
+    def index():
+        return {
+            'message': 'Lecture App API',
+            'version': '1.0.0',
+            'endpoints': {
+                'health': '/health',
+                'api_health': '/api/health',
+                'voice': '/voice',
+                'admin': '/admin'
+            }
+        }, 200
+    
     # Health check endpoint
     @app.route('/health')
     def health():
@@ -71,6 +85,22 @@ def create_app():
         except Exception as e:
             logger.error(f"API health check failed: {e}")
             return {'status': 'unhealthy', 'error': str(e)}, 500
+    
+    # Routes endpoint pro debugging
+    @app.route('/routes')
+    def routes():
+        try:
+            routes_list = []
+            for rule in app.url_map.iter_rules():
+                routes_list.append({
+                    'endpoint': rule.endpoint,
+                    'methods': list(rule.methods),
+                    'rule': str(rule)
+                })
+            return {'routes': routes_list}, 200
+        except Exception as e:
+            logger.error(f"Routes endpoint failed: {e}")
+            return {'error': str(e)}, 500
     
     # Konfigurace logování
     if not app.debug:
