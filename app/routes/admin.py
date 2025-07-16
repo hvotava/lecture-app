@@ -278,19 +278,30 @@ def delete_user(user_id):
 @bp.route("/users/new", methods=["GET", "POST"])
 def new_user():
     """Vytvoří nového uživatele."""
-    form = UserForm()
-    if form.validate_on_submit():
-        user = User(
-            name=form.name.data,
-            phone=format_phone_number(form.phone.data),
-            language=form.language.data,
-            detail=form.detail.data
-        )
-        db.session.add(user)
-        db.session.commit()
-        flash("Uživatel byl úspěšně vytvořen", "success")
-        return redirect(url_for("admin.list_users"))
-    return render_template("users/form.html", form=form)
+    try:
+        form = UserForm()
+        if form.validate_on_submit():
+            try:
+                user = User(
+                    name=form.name.data,
+                    phone=format_phone_number(form.phone.data),
+                    language=form.language.data,
+                    detail=form.detail.data
+                )
+                db.session.add(user)
+                db.session.commit()
+                flash("Uživatel byl úspěšně vytvořen", "success")
+                return redirect(url_for("admin.list_users"))
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Chyba při vytváření uživatele v databázi: {str(e)}")
+                flash(f"Chyba při vytváření uživatele: {str(e)}", "error")
+        return render_template("users/form.html", form=form)
+    except Exception as e:
+        logger.error(f"Kritická chyba v new_user endpointu: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        flash(f"Kritická chyba: {str(e)}", "error")
+        return render_template("users/form.html", form=UserForm())
 
 @bp.route("/users/<int:id>/edit", methods=["GET", "POST"])
 def edit_user(id):
@@ -408,5 +419,33 @@ def network_test():
         results['http_test'] = f'OK - IP: {response.json().get("origin", "unknown")}'
     except Exception as e:
         results['http_test'] = f'CHYBA: {str(e)}'
+    
+    return jsonify(results)
+
+@bp.route('/db-test')
+def db_test():
+    """Test endpoint pro ověření databáze."""
+    results = {}
+    
+    try:
+        # Test připojení k databázi
+        db.session.execute('SELECT 1')
+        results['db_connection'] = 'OK'
+    except Exception as e:
+        results['db_connection'] = f'CHYBA: {str(e)}'
+    
+    try:
+        # Test tabulky User
+        user_count = User.query.count()
+        results['user_table'] = f'OK - {user_count} uživatelů'
+    except Exception as e:
+        results['user_table'] = f'CHYBA: {str(e)}'
+    
+    try:
+        # Test tabulky Lesson
+        lesson_count = Lesson.query.count()
+        results['lesson_table'] = f'OK - {lesson_count} lekcí'
+    except Exception as e:
+        results['lesson_table'] = f'CHYBA: {str(e)}'
     
     return jsonify(results) 
