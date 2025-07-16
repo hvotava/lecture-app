@@ -59,7 +59,7 @@ def test_gunicorn_start():
             'gunicorn',
             '--bind', '0.0.0.0:8080',
             '--workers', '1',
-            '--worker-class', 'gevent',
+            '--worker-class', 'sync',
             '--timeout', '30',
             '--log-level', 'info',
             'wsgi:app'

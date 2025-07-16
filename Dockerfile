@@ -28,5 +28,5 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 # Spustíme aplikaci s více logováním
-CMD python -c "import os; print(f'PORT: {os.environ.get(\"PORT\", \"NENASTAVEN\")}'); print(f'PWD: {os.getcwd()}'); print('Spouštím gunicorn...')" && gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class gevent --log-level debug wsgi:app
+CMD python -c "import os; print(f'PORT: {os.environ.get(\"PORT\", \"NENASTAVEN\")}'); print(f'PWD: {os.getcwd()}'); print('Spouštím gunicorn...')" && gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class sync --log-level debug wsgi:app
 

@@ -20,12 +20,12 @@ except ImportError as e:
     logger.error(f"Chyba při importu databázových komponent: {str(e)}")
     raise
 
-__all__ = ['db', 'User', 'Lesson', 'Attempt', 'Answer']
+__all__ = ['db', 'User', 'Lesson', 'Attempt', 'Answer', 'create_app', 'socketio']
 
 # Inicializace rozšíření
 db = SQLAlchemy()
 csrf = CSRFProtect()
-socketio = SocketIO(cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(cors_allowed_origins="*", async_mode='threading')
 
 def create_app():
     """Vytvoří a nakonfiguruje Flask aplikaci."""
@@ -47,7 +47,7 @@ def create_app():
     
     # Registrace blueprintů
     from app.routes.voice import voice_bp
-    from app.routes.admin import admin_bp
+    from app.routes.admin import bp as admin_bp
     
     app.register_blueprint(voice_bp, url_prefix='/voice')
     app.register_blueprint(admin_bp, url_prefix='/admin')
