@@ -2,7 +2,6 @@
 
 import logging
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_wtf.csrf import CSRFProtect
 from flask_socketio import SocketIO
@@ -22,8 +21,7 @@ except ImportError as e:
 
 __all__ = ['db', 'User', 'Lesson', 'Attempt', 'Answer', 'create_app', 'socketio']
 
-# Inicializace rozšíření
-db = SQLAlchemy()
+# Inicializace rozšíření - použijeme db z database.py
 csrf = CSRFProtect()
 socketio = SocketIO(cors_allowed_origins="*", async_mode='threading')
 
@@ -41,6 +39,15 @@ def create_app():
     db.init_app(app)
     csrf.init_app(app)
     socketio.init_app(app)
+    
+    # Inicializace databáze
+    try:
+        from app.database import init_db
+        init_db(app)
+        logger.info("Databáze byla úspěšně inicializována")
+    except Exception as e:
+        logger.error(f"Chyba při inicializaci databáze: {e}")
+        # Pokračujeme i bez databáze pro testování
     
     # CORS konfigurace
     CORS(app, origins=["https://lecture-synqflows.appspot.com", "http://localhost:3000"])
