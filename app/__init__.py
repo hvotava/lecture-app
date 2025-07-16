@@ -40,13 +40,26 @@ def create_app():
     csrf.init_app(app)
     socketio.init_app(app)
     
-    # Inicializace databáze
+    # Inicializace databáze - vytvoření tabulek
     try:
-        from app.database import init_db
-        init_db(app)
-        logger.info("Databáze byla úspěšně inicializována")
+        with app.app_context():
+            logger.info(f"Vytvářím databázové tabulky pro URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
+            db.create_all()
+            logger.info("Databázové tabulky byly úspěšně vytvořeny")
+            
+            # Ověření, že tabulky existují
+            try:
+                from app.models import User, Lesson
+                user_count = User.query.count()
+                lesson_count = Lesson.query.count()
+                logger.info(f"Ověření tabulek: {user_count} uživatelů, {lesson_count} lekcí")
+            except Exception as verify_error:
+                logger.error(f"Chyba při ověření tabulek: {verify_error}")
+                
     except Exception as e:
-        logger.error(f"Chyba při inicializaci databáze: {e}")
+        logger.error(f"Chyba při vytváření databázových tabulek: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         # Pokračujeme i bez databáze pro testování
     
     # CORS konfigurace
@@ -108,6 +121,64 @@ def create_app():
         except Exception as e:
             logger.error(f"Routes endpoint failed: {e}")
             return {'error': str(e)}, 500
+    
+    # Force database initialization endpoint
+    @app.route('/force-init-db')
+    def force_init_db():
+        try:
+            with app.app_context():
+                logger.info("Vynucená inicializace databáze")
+                db.create_all()
+                
+                # Vytvoření ukázkových dat
+                from app.models import User, Lesson
+                
+                # Kontrola, zda už existují data
+                if User.query.count() == 0:
+                    user = User(
+                        name="Test Uživatel",
+                        phone="+420 123 456 789",
+                        language="cs",
+                        detail="Ukázkový uživatel"
+                    )
+                    db.session.add(user)
+                    logger.info("Vytvořen ukázkový uživatel")
+                
+                if Lesson.query.count() == 0:
+                    lesson = Lesson(
+                        title="Ukázková lekce",
+                        language="cs",
+                        script="Toto je ukázkový text lekce.",
+                        questions={
+                            "all": [
+                                {"question": "Test otázka?", "answer": "test"}
+                            ],
+                            "current": "Test otázka?"
+                        }
+                    )
+                    db.session.add(lesson)
+                    logger.info("Vytvořena ukázková lekce")
+                
+                db.session.commit()
+                
+                user_count = User.query.count()
+                lesson_count = Lesson.query.count()
+                
+                return {
+                    'status': 'success',
+                    'message': 'Databáze byla úspěšně inicializována',
+                    'users': user_count,
+                    'lessons': lesson_count
+                }, 200
+                
+        except Exception as e:
+            logger.error(f"Chyba při vynucené inicializaci databáze: {e}")
+            import traceback
+            return {
+                'status': 'error',
+                'error': str(e),
+                'traceback': traceback.format_exc()
+            }, 500
     
     # Konfigurace logování
     if not app.debug:
