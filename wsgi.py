@@ -29,5 +29,12 @@ except Exception as e:
 # Pro Gunicorn/Nixpacks: stačí, že je tu `app`
 # Pro lokální vývoj: použij socketio.run
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
+    port_env = os.environ.get("PORT", "8080")
+    try:
+        # Zajistí, že port je číslo, i když někdo do env dá "$PORT" nebo prázdný string
+        port = int(port_env)
+    except Exception:
+        logger.warning(f"Neplatná proměnná PORT ('{port_env}'), používám port 8080.")
+        port = 8080
     socketio.run(app, debug=True, host="0.0.0.0", port=port)
+
