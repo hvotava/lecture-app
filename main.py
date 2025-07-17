@@ -20,6 +20,10 @@ app.add_middleware(
 
 logger = logging.getLogger("uvicorn")
 
+@app.get("/")
+def root():
+    return {"message": "Lecture App FastAPI běží!", "endpoints": ["/health", "/voice/", "/voice/media-stream"]}
+
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "lecture-app"}
