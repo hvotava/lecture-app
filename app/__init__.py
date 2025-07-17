@@ -25,6 +25,14 @@ __all__ = ['db', 'User', 'Lesson', 'Attempt', 'Answer', 'create_app', 'socketio'
 csrf = CSRFProtect()
 socketio = SocketIO(cors_allowed_origins="*", async_mode='threading')
 
+@socketio.on('connect', namespace='/audio')
+def on_connect():
+    print("=== ZAČÁTEK MEDIA STREAM WEBSOCKET ===")
+
+@socketio.on('media', namespace='/audio')
+def on_media(data):
+    print("MEDIA:", data)
+
 def create_app():
     """Vytvoří a nakonfiguruje Flask aplikaci."""
     app = Flask(__name__)

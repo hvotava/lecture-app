@@ -14,6 +14,7 @@ import os
 import json
 import base64
 from dotenv import load_dotenv
+import re
 
 load_dotenv()
 
@@ -134,8 +135,8 @@ def voice():
                     )
                     
                     # Přesměrování na OpenAI Realtime endpoint
-                    base_url = current_app.config.get("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app")
-                    response.redirect(f"{base_url}/voice/openai-realtime?attempt_id={attempt_id}")
+                    base_url = current_app.config.get("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app").rstrip("/")
+                    response.redirect(f"{base_url}/voice/?attempt_id={attempt_id}")
                 else:
                     response.say(
                         "Lekce nebyla nalezena. Zkuste to prosím znovu.",
@@ -161,9 +162,11 @@ def voice():
             )
             
             # Přesměrování na OpenAI Realtime endpoint bez attempt_id
-            base_url = current_app.config.get("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app")
-            response.redirect(f"{base_url}/voice/openai-realtime")
+            base_url = current_app.config.get("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app").rstrip("/")
+            response.redirect(f"{base_url}/voice/")
         
+        logger.info("TwiML odpověď:")
+        logger.info(str(response))
         return Response(str(response), mimetype='text/xml')
         
     except Exception as e:
