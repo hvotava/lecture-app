@@ -135,7 +135,7 @@ def admin_call_user(user_id: int = Path(...)):
         from app.services.twilio_service import TwilioService
         twilio = TwilioService()
         base_url = os.getenv("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app")
-        webhook_url = f"{base_url}/voice/?attempt_id={user.id}"
+        webhook_url = f"{base_url.rstrip('/')}/voice/?attempt_id={user.id}"
         twilio.call(user.phone, webhook_url)
     except Exception as e:
         print(f"Chyba při volání Twilio: {e}")
