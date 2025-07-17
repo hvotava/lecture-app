@@ -134,9 +134,14 @@ def voice():
                         rate="0.9"
                     )
                     
-                    # Přesměrování na OpenAI Realtime endpoint
-                    base_url = current_app.config.get("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app").rstrip("/")
-                    response.redirect(f"{base_url}/voice/openai-realtime?attempt_id={attempt_id}", method="POST")
+                    # Přímé vytvoření Media Stream (Connect/Stream) bez redirectu
+                    connect = Connect()
+                    stream = Stream(
+                        url=f"wss://{request.host}/voice/media-stream?attempt_id={attempt_id}",
+                        track="both_tracks"
+                    )
+                    connect.append(stream)
+                    response.append(connect)
                 else:
                     response.say(
                         "Lekce nebyla nalezena. Zkuste to prosím znovu.",
@@ -160,10 +165,13 @@ def voice():
                 voice="Google.cs-CZ-Standard-A",
                 rate="0.9"
             )
-            
-            # Přesměrování na OpenAI Realtime endpoint bez attempt_id
-            base_url = current_app.config.get("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app").rstrip("/")
-            response.redirect(f"{base_url}/voice/openai-realtime", method="POST")
+            connect = Connect()
+            stream = Stream(
+                url=f"wss://{request.host}/voice/media-stream",
+                track="both_tracks"
+            )
+            connect.append(stream)
+            response.append(connect)
         
         logger.info("TwiML odpověď:")
         logger.info(str(response))
