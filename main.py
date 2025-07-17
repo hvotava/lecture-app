@@ -43,12 +43,12 @@ def admin_root(request: Request):
     # Přesměrování na seznam uživatelů (jako ve Flasku)
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
-@admin_router.get("/users", response_class=HTMLResponse)
+@admin_router.get("/users", response_class=HTMLResponse, name="admin_list_users")
 def admin_list_users(request: Request):
     users = User.query.all() if hasattr(User, 'query') else []
     return templates.TemplateResponse("users/list.html", {"request": request, "users": users})
 
-@admin_router.get("/users/new", response_class=HTMLResponse)
+@admin_router.get("/users/new", response_class=HTMLResponse, name="admin_new_user_get")
 def admin_new_user_get(request: Request):
     # Prázdný formulář pro nového uživatele
     return templates.TemplateResponse("users/form.html", {"request": request, "user": None, "form": {"name": "", "phone": "", "language": "cs", "detail": "", "name.errors": [], "phone.errors": [], "language.errors": [], "detail.errors": []}})
@@ -137,7 +137,7 @@ def admin_call_user(user_id: int = Path(...)):
         print(f"Chyba při volání Twilio: {e}")
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
-@admin_router.get("/lessons", response_class=HTMLResponse)
+@admin_router.get("/lessons", response_class=HTMLResponse, name="admin_list_lessons")
 def admin_list_lessons(request: Request):
     lessons = Lesson.query.order_by(Lesson.id.desc()).all() if hasattr(Lesson, 'query') else []
     return templates.TemplateResponse("lessons/list.html", {"request": request, "lessons": lessons})
