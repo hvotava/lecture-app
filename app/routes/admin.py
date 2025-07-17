@@ -505,4 +505,49 @@ def debug_openai():
         
     except Exception as e:
         logger.error(f"Chyba při debugování OpenAI: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/debug/database", methods=["GET"])
+def debug_database():
+    """Debug endpoint pro kontrolu databázové konfigurace."""
+    try:
+        from flask import current_app
+        
+        # Kontrola environment variables
+        database_url = os.getenv('DATABASE_URL')
+        database_url_exists = bool(database_url)
+        database_url_start = database_url[:20] + "..." if database_url and len(database_url) > 20 else "N/A"
+        
+        # Kontrola konfigurace aplikace
+        app_database_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', 'N/A')
+        app_database_uri_start = app_database_uri[:20] + "..." if app_database_uri and len(app_database_uri) > 20 else "N/A"
+        
+        # Test připojení k databázi
+        try:
+            from app.database import db
+            with current_app.app_context():
+                # Jednoduchý test připojení
+                db.engine.execute("SELECT 1")
+                database_connection = "OK"
+        except Exception as db_error:
+            database_connection = f"ERROR: {str(db_error)}"
+        
+        debug_info = {
+            "environment_variables": {
+                "DATABASE_URL_exists": database_url_exists,
+                "DATABASE_URL_start": database_url_start,
+                "DATABASE_URL_full": database_url if database_url else "N/A"
+            },
+            "app_configuration": {
+                "SQLALCHEMY_DATABASE_URI_start": app_database_uri_start,
+                "SQLALCHEMY_DATABASE_URI_full": app_database_uri
+            },
+            "database_connection": database_connection,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        logger.error(f"Chyba při debugování databáze: {str(e)}")
         return jsonify({"error": str(e)}), 500 

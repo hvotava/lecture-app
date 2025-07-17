@@ -23,7 +23,13 @@ class Config:
     OPENAI_MODEL = 'gpt-4.1-turbo-preview'
     
     # Databázová konfigurace
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///app.db')
+    database_url = os.getenv('DATABASE_URL', 'sqlite:///app.db')
+    
+    # Oprava pro Railway PostgreSQL URL
+    if database_url and database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    
+    SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Audio konfigurace
