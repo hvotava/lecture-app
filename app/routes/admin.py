@@ -369,7 +369,8 @@ def call_user(user_id):
             logger.info(f"- next_due: {attempt.next_due}")
             
             # Zavolej uživateli
-            webhook_url = f"{current_app.config['WEBHOOK_BASE_URL']}/voice/?attempt_id={attempt.id}"
+            base_url = current_app.config['WEBHOOK_BASE_URL'].rstrip('/')
+            webhook_url = f"{base_url}/voice?attempt_id={attempt.id}"
             logger.info(f"Volám uživatele {formatted_phone} s webhook URL: {webhook_url}")
             
             call_result = twilio.call(formatted_phone, webhook_url)

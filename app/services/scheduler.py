@@ -69,7 +69,8 @@ class SchedulerService:
                     continue
                 
                 # Spusť hovor
-                webhook_url = f"{current_app.config['WEBHOOK_BASE_URL']}/voice?attempt_id={attempt.id}"
+                base_url = current_app.config['WEBHOOK_BASE_URL'].rstrip('/')
+                webhook_url = f"{base_url}/voice?attempt_id={attempt.id}"
                 self.twilio.call(user.phone, webhook_url)
                 
             logger.info(f"Kontrola pokusů dokončena, nalezeno {len(attempts)} pokusů")
