@@ -14,7 +14,8 @@ class Config:
     TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
     
     # Webhook URL - dynamická podle prostředí
-    WEBHOOK_BASE_URL = os.getenv('WEBHOOK_BASE_URL', 'https://lecture-app-296578790242.europe-west1.run.app')
+    # Na Railway se automaticky nastaví správná URL
+    WEBHOOK_BASE_URL = os.getenv('WEBHOOK_BASE_URL', 'https://localhost:8080')
     VOICE_WEBHOOK_URL = f"{WEBHOOK_BASE_URL}/voice"
     MEDIA_STREAM_WEBHOOK_URL = f"{WEBHOOK_BASE_URL}/media-stream"
     

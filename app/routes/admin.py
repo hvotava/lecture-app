@@ -550,4 +550,56 @@ def debug_database():
         
     except Exception as e:
         logger.error(f"Chyba při debugování databáze: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/debug/env", methods=["GET"])
+def debug_env():
+    """Debug endpoint pro kontrolu všech environment variables."""
+    try:
+        from flask import current_app
+        
+        # Seznam všech důležitých environment variables
+        env_vars = [
+            'DATABASE_URL',
+            'OPENAI_API_KEY', 
+            'TWILIO_ACCOUNT_SID',
+            'TWILIO_AUTH_TOKEN',
+            'TWILIO_PHONE_NUMBER',
+            'WEBHOOK_BASE_URL',
+            'SECRET_KEY',
+            'PORT',
+            'FLASK_ENV',
+            'FLASK_DEBUG'
+        ]
+        
+        env_info = {}
+        for var in env_vars:
+            value = os.getenv(var)
+            if value:
+                # Skryjeme citlivé údaje
+                if 'KEY' in var or 'TOKEN' in var or 'SID' in var:
+                    env_info[var] = f"{value[:10]}..." if len(value) > 10 else "***"
+                elif 'URL' in var:
+                    env_info[var] = value
+                else:
+                    env_info[var] = value
+            else:
+                env_info[var] = "NENASTAVENO"
+        
+        # Kontrola konfigurace aplikace
+        app_config = {
+            "WEBHOOK_BASE_URL": current_app.config.get('WEBHOOK_BASE_URL', 'N/A'),
+            "SQLALCHEMY_DATABASE_URI_start": current_app.config.get('SQLALCHEMY_DATABASE_URI', 'N/A')[:30] + "..." if current_app.config.get('SQLALCHEMY_DATABASE_URI') else 'N/A'
+        }
+        
+        debug_info = {
+            "environment_variables": env_info,
+            "app_configuration": app_config,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        logger.error(f"Chyba při debugování environment variables: {str(e)}")
         return jsonify({"error": str(e)}), 500 
