@@ -164,21 +164,131 @@ Vrať odpověď ve formátu JSON pole objektů s klíči:
             logger.error(f"Chyba při generování hlasových otázek: {str(e)}")
             return []
 
-    def evaluate_voice_answer(
-        self,
-        question: str,
-        correct_answer: str,
-        user_answer: str,
-        language: str = "cs"
-    ) -> Dict[str, Any]:
+    def speech_to_text(self, audio_data: bytes, language: str = "cs") -> str:
         """
-        Vyhodnotí hlasovou odpověď uživatele.
+        Převádí audio data na text pomocí OpenAI Whisper API.
+        
+        Args:
+            audio_data: Raw audio data (např. WAV, MP3)
+            language: Jazyk audia (např. "cs", "en")
+            
+        Returns:
+            Přepsaný text nebo prázdný string při chybě
+        """
+        if not self.enabled or not self.client:
+            logger.warning("OpenAI služba není povolena - speech-to-text nebude proveden")
+            return ""
+            
+        try:
+            logger.info(f"Převádím audio na text (jazyk: {language})")
+            
+            # Whisper API očekává audio soubor nebo base64 data
+            # Pro Twilio Media Streams je audio v base64 formátu
+            import base64
+            
+            # Pokud jsou data v base64, dekódujeme je
+            if isinstance(audio_data, str):
+                try:
+                    audio_data = base64.b64decode(audio_data)
+                except:
+                    pass
+            
+            # Vytvoříme dočasný soubor pro audio data
+            import tempfile
+            import os
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+                temp_file.write(audio_data)
+                temp_file_path = temp_file.name
+            
+            try:
+                # Volání Whisper API
+                with open(temp_file_path, "rb") as audio_file:
+                    response = self.client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=audio_file,
+                        language=language,
+                        response_format="text"
+                    )
+                
+                text = response.strip()
+                logger.info(f"Přepsaný text: {text}")
+                return text
+                
+            finally:
+                # Smazání dočasného souboru
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                    
+        except Exception as e:
+            logger.error(f"Chyba při převodu audia na text: {str(e)}")
+            return ""
+    
+    def generate_questions_from_lesson(self, lesson_script: str, language: str = "cs", num_questions: int = 5) -> List[Dict[str, Any]]:
+        """
+        Vygeneruje otázky z obsahu lekce pomocí GPT-4.
+        
+        Args:
+            lesson_script: Obsah lekce
+            language: Jazyk otázek
+            num_questions: Počet otázek k vygenerování
+            
+        Returns:
+            Seznam otázek s odpověďmi
+        """
+        if not self.enabled or not self.client:
+            logger.warning("OpenAI služba není povolena - generování otázek nebude provedeno")
+            return []
+            
+        try:
+            logger.info(f"Generuji {num_questions} otázek z lekce v jazyce {language}")
+            
+            system_prompt = f"""Jsi zkušený učitel {language} jazyka. Vytvoř {num_questions} testovacích otázek z následujícího obsahu lekce.
+
+Otázky by měly:
+- Testovat porozumění klíčových konceptů z lekce
+- Být jasné a srozumitelné
+- Mít jednoznačné správné odpovědi
+- Pokrývat různé části obsahu lekce
+- Být vhodné pro ústní odpověď (ne příliš složité)
+
+Vrať odpověď ve formátu JSON pole objektů s klíči:
+- "question": text otázky
+- "correct_answer": správná odpověď
+- "topic": hlavní téma otázky
+- "difficulty": obtížnost (1-5, kde 1=snadná, 5=obtížná)"""
+
+            response = self.client.chat.completions.create(
+                model="gpt-4-turbo-preview",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Obsah lekce:\n{lesson_script}"}
+                ],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            
+            content = response.choices[0].message.content
+            logger.info(f"Obdržena odpověď od OpenAI pro generování otázek")
+            
+            import json
+            questions = json.loads(content)
+            logger.info(f"Vygenerováno {len(questions)} otázek")
+            return questions
+            
+        except Exception as e:
+            logger.error(f"Chyba při generování otázek z lekce: {str(e)}")
+            return []
+    
+    def evaluate_voice_answer(self, question: str, correct_answer: str, user_answer: str, language: str = "cs") -> Dict[str, Any]:
+        """
+        Vyhodnotí hlasovou odpověď uživatele pomocí GPT-4.
         
         Returns:
             Dict obsahující: score, feedback, is_correct, suggestions
         """
         if not self.enabled or not self.client:
-            logger.warning("OpenAI služba není povolena - hodnocení hlasové odpovědi nebude provedeno")
+            logger.warning("OpenAI služba není povolena - hodnocení odpovědi nebude provedeno")
             return {
                 "score": 0,
                 "feedback": "Hodnocení není k dispozici",
@@ -189,7 +299,7 @@ Vrať odpověď ve formátu JSON pole objektů s klíči:
         try:
             logger.info(f"Hodnotím hlasovou odpověď v jazyce {language}")
             
-            system_prompt = f"""Jsi zkušený učitel {language} jazyka. Vyhodnoť hlasovou odpověď studenta.
+            system_prompt = f"""Jsi zkušený učitel {language} jazyka. Vyhodnoť odpověď studenta na otázku.
 
 Zohledni:
 - Správnost obsahu odpovědi
@@ -202,7 +312,7 @@ Vrať JSON ve formátu:
     "score": 0-100,
     "feedback": "stručná zpětná vazba v {language}",
     "is_correct": true/false,
-    "suggestions": ["tip1", "tip2"] // tipy pro zlepšení
+    "suggestions": ["tip1", "tip2"]
 }}"""
 
             response = self.client.chat.completions.create(
@@ -221,15 +331,15 @@ Vyhodnoť tuto odpověď."""}
             )
             
             content = response.choices[0].message.content
-            logger.info(f"Obdržena odpověď od OpenAI pro hodnocení hlasové odpovědi")
+            logger.info(f"Obdržena odpověď od OpenAI pro hodnocení")
             
             import json
             result = json.loads(content)
-            logger.info(f"Hodnocení hlasové odpovědi: {result}")
+            logger.info(f"Hodnocení odpovědi: {result}")
             return result
             
         except Exception as e:
-            logger.error(f"Chyba při hodnocení hlasové odpovědi: {str(e)}")
+            logger.error(f"Chyba při hodnocení odpovědi: {str(e)}")
             return {
                 "score": 0,
                 "feedback": "Hodnocení se nezdařilo",

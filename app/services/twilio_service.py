@@ -10,6 +10,7 @@ import re
 import html
 import xml.etree.ElementTree as ET
 import sys
+from twilio.twiml.voice_response import Connect, Stream
 
 logger = logging.getLogger(__name__)
 
@@ -343,3 +344,210 @@ class TwilioService:
         twiml = str(response)
         logger.info(f"Vygenerovaný TwiML pro stop: {twiml}")
         return twiml 
+
+    def create_introduction_response(self, lesson=None) -> str:
+        """Vytvoří úvodní TwiML odpověď."""
+        response = VoiceResponse()
+        
+        # Přivítání
+        response.say(
+            "Vítejte u AI asistenta pro výuku jazyků!",
+            language="cs-CZ",
+            voice="Google.cs-CZ-Standard-A",
+            rate="0.9"
+        )
+        
+        if lesson:
+            response.say(
+                f"Dnes se budeme učit o tématu: {lesson.title}",
+                language="cs-CZ",
+                voice="Google.cs-CZ-Standard-A",
+                rate="0.9"
+            )
+            response.pause(length=1)
+            response.say(
+                "Můžete se mě ptát na cokoliv ohledně tohoto tématu. Až budete připraveni na zkoušení, řekněte 'otázky' nebo 'zkoušení'.",
+                language="cs-CZ",
+                voice="Google.cs-CZ-Standard-A",
+                rate="0.9"
+            )
+        else:
+            response.say(
+                "Můžeme si povídat o různých tématech. Řekněte mi, co vás zajímá!",
+                language="cs-CZ",
+                voice="Google.cs-CZ-Standard-A",
+                rate="0.9"
+            )
+        
+        # Připojení na Media Stream
+        connect = Connect()
+        stream = Stream(
+            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            track="both_tracks"
+        )
+        connect.append(stream)
+        response.append(connect)
+        
+        return str(response)
+    
+    def create_teaching_response(self, lesson) -> str:
+        """Vytvoří TwiML odpověď pro fázi výuky."""
+        response = VoiceResponse()
+        
+        if lesson:
+            # Přečtení části skriptu lekce
+            script_preview = lesson.script[:300] + "..." if len(lesson.script) > 300 else lesson.script
+            response.say(
+                f"Téma lekce: {script_preview}",
+                language="cs-CZ",
+                voice="Google.cs-CZ-Standard-A",
+                rate="0.8"
+            )
+            response.pause(length=1)
+            response.say(
+                "Můžete se mě ptát na cokoliv ohledně tohoto tématu. Až budete připraveni na zkoušení, řekněte 'otázky' nebo 'zkoušení'.",
+                language="cs-CZ",
+                voice="Google.cs-CZ-Standard-A",
+                rate="0.9"
+            )
+        
+        # Připojení na Media Stream
+        connect = Connect()
+        stream = Stream(
+            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            track="both_tracks"
+        )
+        connect.append(stream)
+        response.append(connect)
+        
+        return str(response)
+    
+    def create_questioning_start_response(self) -> str:
+        """Vytvoří TwiML odpověď pro začátek zkoušení."""
+        response = VoiceResponse()
+        
+        response.say(
+            "Výborně! Nyní začneme se zkoušením. Budu vám klást otázky a vy mi odpovíte. Řekněte mi, když jste připraveni.",
+            language="cs-CZ",
+            voice="Google.cs-CZ-Standard-A",
+            rate="0.9"
+        )
+        
+        # Připojení na Media Stream
+        connect = Connect()
+        stream = Stream(
+            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            track="both_tracks"
+        )
+        connect.append(stream)
+        response.append(connect)
+        
+        return str(response)
+    
+    def create_question_response(self, question: str, language: str = "cs-CZ") -> str:
+        """Vytvoří TwiML odpověď s otázkou."""
+        response = VoiceResponse()
+        
+        response.say(
+            f"Otázka: {question}",
+            language=language,
+            voice="Google.cs-CZ-Standard-A",
+            rate="0.9"
+        )
+        response.pause(length=1)
+        response.say(
+            "Prosím odpovězte.",
+            language=language,
+            voice="Google.cs-CZ-Standard-A",
+            rate="0.9"
+        )
+        
+        # Připojení na Media Stream
+        connect = Connect()
+        stream = Stream(
+            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            track="both_tracks"
+        )
+        connect.append(stream)
+        response.append(connect)
+        
+        return str(response)
+    
+    def create_feedback_response(self, feedback: str, language: str = "cs-CZ") -> str:
+        """Vytvoří TwiML odpověď s feedbackem."""
+        response = VoiceResponse()
+        
+        response.say(
+            feedback,
+            language=language,
+            voice="Google.cs-CZ-Standard-A",
+            rate="0.9"
+        )
+        response.pause(length=1)
+        
+        # Připojení na Media Stream
+        connect = Connect()
+        stream = Stream(
+            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            track="both_tracks"
+        )
+        connect.append(stream)
+        response.append(connect)
+        
+        return str(response)
+    
+    def create_evaluation_response(self, user_answers: list, language: str = "cs-CZ") -> str:
+        """Vytvoří TwiML odpověď s celkovým vyhodnocením."""
+        response = VoiceResponse()
+        
+        if user_answers:
+            total_score = sum(answer["score"] for answer in user_answers)
+            average_score = total_score / len(user_answers)
+            
+            response.say(
+                f"Zkoušení je ukončeno! Vaše celkové skóre je {average_score:.1f} procent.",
+                language=language,
+                voice="Google.cs-CZ-Standard-A",
+                rate="0.9"
+            )
+            response.pause(length=1)
+            
+            if average_score >= 80:
+                response.say(
+                    "Výborně! Máte velmi dobré znalosti tohoto tématu.",
+                    language=language,
+                    voice="Google.cs-CZ-Standard-A",
+                    rate="0.9"
+                )
+            elif average_score >= 60:
+                response.say(
+                    "Dobře! Máte solidní znalosti, ale je prostor pro zlepšení.",
+                    language=language,
+                    voice="Google.cs-CZ-Standard-A",
+                    rate="0.9"
+                )
+            else:
+                response.say(
+                    "Doporučuji si téma zopakovat. Můžete mi znovu zavolat pro další pokus.",
+                    language=language,
+                    voice="Google.cs-CZ-Standard-A",
+                    rate="0.9"
+                )
+        else:
+            response.say(
+                "Zkoušení bylo ukončeno bez odpovědí.",
+                language=language,
+                voice="Google.cs-CZ-Standard-A",
+                rate="0.9"
+            )
+        
+        response.pause(length=1)
+        response.say(
+            "Děkujeme za volání! Na shledanou.",
+            language=language,
+            voice="Google.cs-CZ-Standard-A",
+            rate="0.9"
+        )
+        response.hangup()
+        
+        return str(response) 
