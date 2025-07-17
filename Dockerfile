@@ -35,6 +35,3 @@ CMD echo "=== STARTING APPLICATION ===" && \
     ls -la && \
     echo "=== STARTING UVICORN ===" && \
     uvicorn main:app --host 0.0.0.0 --port $PORT --log-level debug
-
-
-CMD ... uvicorn main:app --host 0.0.0.0 --port $PORT --log-level debug
