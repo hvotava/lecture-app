@@ -33,6 +33,5 @@ CMD echo "=== STARTING APPLICATION ===" && \
     echo "PWD: $(pwd)" && \
     echo "Files in current directory:" && \
     ls -la && \
-    echo "=== STARTING GUNICORN ===" && \
-    gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class sync --log-level debug --timeout 120 wsgi:app
-
+    echo "=== STARTING UVICORN ===" && \
+    uvicorn main:app --host 0.0.0.0 --port $PORT --log-level debug
