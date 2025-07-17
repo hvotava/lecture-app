@@ -25,10 +25,7 @@ class OpenAIService:
                 return
             
             # Inicializace klienta
-            self.client = OpenAI(
-                api_key=api_key,
-                timeout=30.0
-            )
+            self.client = OpenAI(api_key=api_key)
             self.enabled = True
             logger.info("OpenAI služba byla úspěšně inicializována")
             
