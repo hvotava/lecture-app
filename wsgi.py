@@ -16,11 +16,15 @@ logger.info(f"Aktuální adresář: {os.getcwd()}")
 logger.info(f"PORT proměnná: {os.environ.get('PORT', 'NENASTAVEN')}")
 
 try:
-    from app import create_app, socketio
-    logger.info("✅ Importuji create_app a socketio z app")
+    from app import create_app
+    logger.info("✅ Importuji create_app z app")
 
     app = create_app()
     logger.info("✅ Aplikace byla úspěšně vytvořena")
+
+    # Import socketio po vytvoření aplikace
+    from app import socketio
+    logger.info("✅ Importuji socketio z app")
 
     app.config["WEBSOCKET_ENABLED"] = True
     logger.info("✅ WebSocket podpora povolena")
