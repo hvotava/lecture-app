@@ -34,6 +34,7 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///lecture.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['WTF_CSRF_ENABLED'] = False  # Vypnuto pro API endpointy
+    app.config['WEBHOOK_BASE_URL'] = os.getenv('WEBHOOK_BASE_URL', 'https://localhost:8080')
     
     # Inicializace rozšíření
     db.init_app(app)
@@ -63,7 +64,12 @@ def create_app():
         # Pokračujeme i bez databáze pro testování
     
     # CORS konfigurace
-    CORS(app, origins=["https://lecture-synqflows.appspot.com", "http://localhost:3000"])
+    CORS(app, origins=[
+        "https://lecture-synqflows.appspot.com", 
+        "http://localhost:3000",
+        "https://lecture-app-production.up.railway.app",
+        "https://*.up.railway.app"
+    ])
     
     # Registrace blueprintů
     from app.routes.voice import voice_bp
