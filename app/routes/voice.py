@@ -818,7 +818,7 @@ def openai_realtime():
         connect = Connect()
         stream = Stream(
             url=f"wss://{request.host}/voice/media-stream?attempt_id={attempt_id}",
-            track="both_tracks"  # Zachytí jak příchozí tak odchozí audio
+            track="both_tracks"  # Opraveno na správnou hodnotu
         )
         connect.append(stream)
         response.append(connect)
