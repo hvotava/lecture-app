@@ -28,10 +28,10 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
 # Spustíme aplikaci s více logováním
-CMD echo "=== STARTING APPLICATION ===" && \
-    echo "PORT: $PORT" && \
+CMD sh -c 'echo "=== STARTING APPLICATION ===" && \
+    echo "PORT: ${PORT:-8080}" && \
     echo "PWD: $(pwd)" && \
     echo "Files in current directory:" && \
     ls -la && \
     echo "=== STARTING UVICORN ===" && \
-    uvicorn main:app --host 0.0.0.0 --port $PORT --log-level debug
+    uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --log-level debug'
