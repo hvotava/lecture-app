@@ -43,7 +43,7 @@ class Config:
     
     # CORS nastavení
     CORS_ORIGINS = [
-        'https://lecture-app-296578790242.europe-west1.run.app',
+        'https://lecture-app-production.up.railway.app',
         'https://lecture-synqflows.pythonanywhere.com',
         'https://localhost:8080',
         'https://*.up.railway.app',  # Railway domény

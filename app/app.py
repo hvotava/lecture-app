@@ -88,7 +88,7 @@ def create_app() -> Flask:
         app.config['PREFERRED_URL_SCHEME'] = 'https'
 
         # Nastavení webhook URL
-        app.config['WEBHOOK_BASE_URL'] = os.getenv('WEBHOOK_BASE_URL', 'https://lecture-app-296578790242.europe-west1.run.app')
+        app.config['WEBHOOK_BASE_URL'] = os.getenv('WEBHOOK_BASE_URL', 'https://lecture-app-production.up.railway.app')
         logger.info(f"Nastavena WEBHOOK_BASE_URL: {app.config['WEBHOOK_BASE_URL']}")
 
         # Databázová konfigurace
