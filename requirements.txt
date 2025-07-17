@@ -6,3 +6,4 @@ twilio
 python-dotenv
 psycopg2-binary
 # ... další závislosti dle původního requirements.txt
+jinja2
