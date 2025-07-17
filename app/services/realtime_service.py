@@ -280,14 +280,17 @@ class TwilioMediaStreamHandler:
             logger.error(f"Chyba při odesílání audio dat do Twilio: {str(e)}")
 
 def handle_media_stream_websocket(request, attempt_id: str = None):
-    """Zpracuje WebSocket připojení pro Media Stream s Flask."""
     import websocket
     import threading
-    
+    import sys
+    from queue import Queue
+    logger.info(f"=== ZAČÁTEK MEDIA STREAM WEBSOCKET ===")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Request path: {request.path}")
+    logger.info(f"Request args: {request.args}")
+    logger.info(f"Attempt ID: {attempt_id}")
     try:
-        logger.info(f"=== ZAČÁTEK MEDIA STREAM WEBSOCKET ===")
-        logger.info(f"Attempt ID: {attempt_id}")
-        
         # Získání kontextu lekce
         lesson_context = ""
         if attempt_id:
@@ -307,121 +310,74 @@ Instrukce pro AI asistenta:
 - Buď trpělivý a povzbuzující
 """
                     logger.info(f"Načten kontext lekce: {lesson.title}")
+                else:
+                    logger.warning(f"Attempt nebo lesson nenalezen pro attempt_id: {attempt_id}")
             except Exception as e:
                 logger.error(f"Chyba při načítání lekce: {str(e)}")
-        
-        # Konfigurace pro OpenAI Realtime API
-        openai_config = {
-            "type": "session.update",
-            "session": {
-                "modalities": ["text", "audio"],
-                "instructions": f"""Jsi užitečný AI asistent pro výuku jazyků. Komunikuješ v češtině.
-
-{lesson_context}
-
-Tvoje úkoly:
-- Odpovídej na otázky studentů o lekci
-- Pomáhej s vysvětlením obtížných částí
-- Buď trpělivý a povzbuzující
-- Mluv přirozeně a srozumitelně
-- Pokud student odpoví na otázku, vyhodnoť ji a poskytni zpětnou vazbu
-- Můžeš klást otázky k lekci pro ověření porozumění
-
-Vždy zůstávej v kontextu výuky a buď konstruktivní.""",
-                "voice": "alloy",
-                "input_audio_format": "g711_ulaw",
-                "output_audio_format": "g711_ulaw",
-                "input_audio_transcription": {
-                    "model": "whisper-1"
-                },
-                "turn_detection": {
-                    "type": "server_vad",
-                    "threshold": 0.5,
-                    "prefix_padding_ms": 300,
-                    "silence_duration_ms": 800
-                },
-                "tools": [],
-                "tool_choice": "auto",
-                "temperature": 0.8,
-                "max_response_output_tokens": 4096
-            }
-        }
-        
-        # WebSocket URL a headers pro OpenAI
-        openai_ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
+        else:
+            logger.warning("Chybí attempt_id v requestu")
+        # Kontrola OpenAI API klíče
         openai_api_key = os.getenv('OPENAI_API_KEY')
-        
         if not openai_api_key:
             logger.error("OPENAI_API_KEY není nastavena")
             return "Missing OpenAI API Key", 500
-        
+        logger.info("OPENAI_API_KEY je nastavena")
+        # WebSocket URL a headers pro OpenAI
+        openai_ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
         headers = [
             f"Authorization: Bearer {openai_api_key}",
             "OpenAI-Beta: realtime=v1"
         ]
-        
+        logger.info(f"Připravuji WebSocket připojení k OpenAI: {openai_ws_url}")
         # Globální proměnné pro WebSocket
         openai_ws = None
         twilio_ws_queue = Queue()
-        
         def on_openai_message(ws, message):
-            """Zpracování zpráv z OpenAI."""
+            logger.info(f"[OpenAI WS] Zpráva přijata: {message[:200]}")
             try:
                 data = json.loads(message)
                 message_type = data.get('type', 'unknown')
-                
-                logger.debug(f"Zpráva z OpenAI: {message_type}")
-                
+                logger.info(f"[OpenAI WS] Typ zprávy: {message_type}")
                 if message_type == 'session.created':
                     session_id = data.get('session', {}).get('id')
                     logger.info(f"OpenAI session vytvořena: {session_id}")
-                    
                 elif message_type == 'response.audio.delta':
-                    # Audio data z OpenAI - přeposílání do Twilio
                     audio_data = data.get('delta', '')
                     if audio_data:
-                        # Vytvoření zprávy pro Twilio Media Stream
                         twilio_message = {
                             "event": "media",
                             "streamSid": "stream_sid_placeholder",
-                            "media": {
-                                "payload": audio_data
-                            }
+                            "media": {"payload": audio_data}
                         }
                         twilio_ws_queue.put(json.dumps(twilio_message))
-                        
-                elif message_type == 'response.audio.done':
-                    logger.info("OpenAI dokončilo audio odpověď")
-                    
-                elif message_type == 'input_audio_buffer.speech_started':
-                    logger.info("OpenAI detekoval začátek řeči")
-                    
-                elif message_type == 'input_audio_buffer.speech_stopped':
-                    logger.info("OpenAI detekoval konec řeči")
-                    
-                elif message_type == 'conversation.item.input_audio_transcription.completed':
-                    transcript = data.get('transcript', '')
-                    logger.info(f"Transkripce uživatele: {transcript}")
-                    
+                        logger.info("Audio delta přeposlána do Twilio fronty")
                 elif message_type == 'error':
                     error_info = data.get('error', {})
                     logger.error(f"Chyba z OpenAI: {error_info}")
-                    
             except Exception as e:
                 logger.error(f"Chyba při zpracování zprávy z OpenAI: {str(e)}")
-        
         def on_openai_error(ws, error):
             logger.error(f"WebSocket chyba s OpenAI: {error}")
-        
         def on_openai_close(ws, close_status_code, close_msg):
-            logger.info("WebSocket připojení k OpenAI bylo ukončeno")
-        
+            logger.info(f"WebSocket připojení k OpenAI bylo ukončeno: {close_status_code} {close_msg}")
         def on_openai_open(ws):
             logger.info("WebSocket připojení k OpenAI bylo navázáno")
-            # Odeslání konfigurace
-            ws.send(json.dumps(openai_config))
-        
-        # Vytvoření WebSocket připojení k OpenAI
+            ws.send(json.dumps({
+                "type": "session.update",
+                "session": {
+                    "modalities": ["text", "audio"],
+                    "instructions": lesson_context,
+                    "voice": "alloy",
+                    "input_audio_format": "g711_ulaw",
+                    "output_audio_format": "g711_ulaw",
+                    "input_audio_transcription": {"model": "whisper-1"},
+                    "turn_detection": {"type": "server_vad", "threshold": 0.5, "prefix_padding_ms": 300, "silence_duration_ms": 800},
+                    "tools": [],
+                    "tool_choice": "auto",
+                    "temperature": 0.8,
+                    "max_response_output_tokens": 4096
+                }
+            }))
         try:
             openai_ws = websocket.WebSocketApp(
                 openai_ws_url,
@@ -431,59 +387,20 @@ Vždy zůstávej v kontextu výuky a buď konstruktivní.""",
                 on_error=on_openai_error,
                 on_close=on_openai_close
             )
-            
-            # Spuštění WebSocket v separátním vlákně
             def run_openai_ws():
+                logger.info("Spouštím OpenAI WebSocket thread...")
                 openai_ws.run_forever()
-            
             openai_thread = threading.Thread(target=run_openai_ws)
             openai_thread.daemon = True
             openai_thread.start()
-            
-            logger.info("OpenAI WebSocket byl spuštěn")
-            
+            logger.info("OpenAI WebSocket byl spuštěn ve vlákně")
         except Exception as e:
             logger.error(f"Chyba při vytváření OpenAI WebSocket: {str(e)}")
             return "Error creating OpenAI WebSocket", 500
-        
-        # Funkce pro zpracování Twilio Media Stream zpráv
-        def handle_twilio_media_message(message_data):
-            """Zpracuje zprávu z Twilio Media Stream."""
-            try:
-                event = message_data.get('event')
-                
-                if event == 'connected':
-                    logger.info("Twilio Media Stream připojen")
-                    
-                elif event == 'start':
-                    logger.info("Twilio Media Stream začal")
-                    stream_sid = message_data.get('start', {}).get('streamSid')
-                    logger.info(f"Stream SID: {stream_sid}")
-                    
-                elif event == 'media':
-                    # Audio data z Twilio - přeposílání do OpenAI
-                    media = message_data.get('media', {})
-                    payload = media.get('payload', '')
-                    
-                    if payload and openai_ws:
-                        # Vytvoření zprávy pro OpenAI
-                        openai_message = {
-                            "type": "input_audio_buffer.append",
-                            "audio": payload
-                        }
-                        openai_ws.send(json.dumps(openai_message))
-                        
-                elif event == 'stop':
-                    logger.info("Twilio Media Stream ukončen")
-                    if openai_ws:
-                        openai_ws.close()
-                        
-            except Exception as e:
-                logger.error(f"Chyba při zpracování Twilio zprávy: {str(e)}")
-        
-        # Návrat informace o úspěšném nastavení
-        return f"Media Stream WebSocket nastaven pro attempt_id: {attempt_id}"
-        
+        logger.info("handle_media_stream_websocket byl úspěšně inicializován až po spuštění OpenAI WS threadu")
+        # Poznámka: Zde by měl být kód pro navázání Twilio WebSocketu, který zde chybí (proto není žádný log z Twilia)
+        logger.warning("POZOR: V této implementaci není navázán WebSocket server pro Twilio Media Stream!")
+        return f"Media Stream WebSocket nastaven pro attempt_id: {attempt_id} (ale Twilio WS není implementován)", 200
     except Exception as e:
         logger.error(f"Chyba při nastavení Media Stream WebSocket: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
