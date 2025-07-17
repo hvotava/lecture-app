@@ -17,6 +17,7 @@ import requests
 from sqlalchemy import text
 import os
 from datetime import datetime
+from app.database import SessionLocal
 
 load_dotenv()
 
@@ -68,12 +69,10 @@ def admin_new_user_post(request: Request, name: str = Form(...), phone: str = Fo
         return templates.TemplateResponse("users/form.html", {"request": request, "user": None, "form": {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": errors["name"], "phone.errors": errors["phone"], "language.errors": errors["language"], "detail.errors": errors["detail"]}})
     # Uložení do DB
     user = User(name=name, phone=phone, language=language, detail=detail)
-    if hasattr(User, 'query') and hasattr(user, 'save'):
-        user.save()
-    else:
-        from app.database import db
-        db.session.add(user)
-        db.session.commit()
+    session = SessionLocal()
+    session.add(user)
+    session.commit()
+    session.close()
     # Přesměrování na seznam uživatelů
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
@@ -104,17 +103,19 @@ def admin_edit_user_post(request: Request, id: int = Path(...), name: str = Form
     user.phone = phone
     user.language = language
     user.detail = detail
-    from app.database import db
-    db.session.commit()
+    session = SessionLocal()
+    session.commit()
+    session.close()
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
 @admin_router.post("/users/{user_id}/delete", name="admin_delete_user")
 def admin_delete_user(user_id: int = Path(...)):
     user = User.query.get(user_id) if hasattr(User, 'query') else None
     if user:
-        from app.database import db
-        db.session.delete(user)
-        db.session.commit()
+        session = SessionLocal()
+        session.delete(user)
+        session.commit()
+        session.close()
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
 @admin_router.post("/users/{user_id}/call", name="admin_call_user")
@@ -160,9 +161,10 @@ def admin_new_lesson_post(request: Request, title: str = Form(...), language: st
         form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": errors["title"], "language.errors": errors["language"], "script.errors": errors["script"], "questions.errors": errors["questions"]}
         return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
     lesson = Lesson(title=title, language=language, script=script, questions=questions)
-    from app.database import db
-    db.session.add(lesson)
-    db.session.commit()
+    session = SessionLocal()
+    session.add(lesson)
+    session.commit()
+    session.close()
     return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
 
 @admin_router.get("/lessons/{id}/edit", response_class=HTMLResponse, name="admin_edit_lesson_get")
@@ -192,17 +194,19 @@ def admin_edit_lesson_post(request: Request, id: int = Path(...), title: str = F
     lesson.language = language
     lesson.script = script
     lesson.questions = questions
-    from app.database import db
-    db.session.commit()
+    session = SessionLocal()
+    session.commit()
+    session.close()
     return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
 
 @admin_router.post("/lessons/{lesson_id}/delete", name="admin_delete_lesson")
 def admin_delete_lesson(lesson_id: int = Path(...)):
     lesson = Lesson.query.get(lesson_id) if hasattr(Lesson, 'query') else None
     if lesson:
-        from app.database import db
-        db.session.delete(lesson)
-        db.session.commit()
+        session = SessionLocal()
+        session.delete(lesson)
+        session.commit()
+        session.close()
     return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
 
 @admin_router.post("/lessons/generate-questions", response_class=JSONResponse)
@@ -253,11 +257,10 @@ def admin_network_test():
 
 @admin_router.get("/db-test", response_class=JSONResponse)
 def admin_db_test():
-    from app.database import db
-    from app.models import User, Lesson
+    session = SessionLocal()
     results = {}
     try:
-        db.session.execute(text('SELECT 1'))
+        session.execute(text('SELECT 1'))
         results['db_connection'] = 'OK'
     except Exception as e:
         results['db_connection'] = f'CHYBA: {str(e)}'
@@ -271,15 +274,15 @@ def admin_db_test():
         results['lesson_table'] = f'OK - {lesson_count} lekcí'
     except Exception as e:
         results['lesson_table'] = f'CHYBA: {str(e)}'
+    session.close()
     return results
 
 @admin_router.get("/init-db", response_class=JSONResponse)
 def admin_init_db():
-    from app.database import db
-    from app.models import User, Lesson
+    session = SessionLocal()
     results = {}
     try:
-        db.create_all()
+        session.create_all()
         results['create_tables'] = 'OK'
     except Exception as e:
         results['create_tables'] = f'CHYBA: {str(e)}'
@@ -289,6 +292,7 @@ def admin_init_db():
         results['tables_check'] = f'OK - {user_count} uživatelů, {lesson_count} lekcí'
     except Exception as e:
         results['tables_check'] = f'CHYBA: {str(e)}'
+    session.close()
     return results
 
 @admin_router.get("/debug/openai", response_class=JSONResponse)
@@ -321,17 +325,18 @@ def admin_debug_openai():
 
 @admin_router.get("/debug/database", response_class=JSONResponse)
 def admin_debug_database():
-    from app.database import db
+    session = SessionLocal()
     database_url = os.getenv('DATABASE_URL')
     database_url_exists = bool(database_url)
     database_url_start = database_url[:20] + "..." if database_url and len(database_url) > 20 else "N/A"
-    app_database_uri = db.engine.url if hasattr(db, 'engine') else 'N/A'
+    app_database_uri = session.engine.url if hasattr(session, 'engine') else 'N/A'
     app_database_uri_start = str(app_database_uri)[:20] + "..." if app_database_uri and len(str(app_database_uri)) > 20 else "N/A"
     try:
-        db.session.execute(text('SELECT 1'))
+        session.execute(text('SELECT 1'))
         database_connection = "OK"
     except Exception as db_error:
         database_connection = f"ERROR: {str(db_error)}"
+    session.close()
     debug_info = {
         "environment_variables": {
             "DATABASE_URL_exists": database_url_exists,
