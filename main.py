@@ -443,7 +443,7 @@ async def voice(request: Request, attempt_id: str = Query(None)):
             )
             connect = Connect()
             stream = Stream(
-                url=f"wss://{request.client.host}/voice/media-stream?attempt_id={attempt_id}",
+                url=f"wss://lecture-app-production.up.railway.app/voice/media-stream?attempt_id={attempt_id}",
                 track="both_tracks"
             )
             connect.append(stream)
@@ -465,7 +465,7 @@ async def voice(request: Request, attempt_id: str = Query(None)):
         )
         connect = Connect()
         stream = Stream(
-            url=f"wss://{request.client.host}/voice/media-stream",
+            url=f"wss://lecture-app-production.up.railway.app/voice/media-stream",
             track="both_tracks"
         )
         connect.append(stream)
