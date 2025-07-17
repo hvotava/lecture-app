@@ -5,6 +5,7 @@ Flask-WTF==1.2.1
 Flask-Migrate==4.0.5
 Flask-Cors==4.0.0
 Flask-SocketIO==5.3.6
+eventlet
 
 # Twilio
 twilio==8.10.3
