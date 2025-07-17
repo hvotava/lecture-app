@@ -31,3 +31,4 @@ instance/
 
 # Railway specific
 .railway/ .env.backup
+.env.backup
