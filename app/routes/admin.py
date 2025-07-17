@@ -472,3 +472,37 @@ def init_db():
         results['tables_check'] = f'CHYBA: {str(e)}'
     
     return jsonify(results) 
+
+@bp.route("/debug/openai", methods=["GET"])
+def debug_openai():
+    """Debug endpoint pro kontrolu OpenAI konfigurace."""
+    try:
+        # Kontrola environment variables
+        api_key = os.getenv('OPENAI_API_KEY')
+        api_key_exists = bool(api_key)
+        api_key_length = len(api_key) if api_key else 0
+        api_key_start = api_key[:7] + "..." if api_key and len(api_key) > 7 else "N/A"
+        
+        # Kontrola OpenAI služby
+        openai_enabled = openai.enabled if openai else False
+        openai_client_exists = bool(openai.client) if openai else False
+        
+        debug_info = {
+            "environment_variables": {
+                "OPENAI_API_KEY_exists": api_key_exists,
+                "OPENAI_API_KEY_length": api_key_length,
+                "OPENAI_API_KEY_start": api_key_start
+            },
+            "openai_service": {
+                "service_exists": bool(openai),
+                "enabled": openai_enabled,
+                "client_exists": openai_client_exists
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        logger.error(f"Chyba při debugování OpenAI: {str(e)}")
+        return jsonify({"error": str(e)}), 500 
