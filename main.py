@@ -122,20 +122,21 @@ def admin_delete_user(user_id: int = Path(...)):
 
 @admin_router.post("/users/{user_id}/call", name="admin_call_user")
 def admin_call_user(user_id: int = Path(...)):
-    user = User.query.get(user_id) if hasattr(User, 'query') else None
+    session = SessionLocal()
+    user = session.query(User).get(user_id)
     if not user:
+        session.close()
         return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
-    # Najdi nejnovější lekci v jazyce uživatele
-    lesson = Lesson.query.filter_by(language=user.language).order_by(Lesson.id.desc()).first() if hasattr(Lesson, 'query') else None
+    lesson = session.query(Lesson).filter_by(language=user.language).order_by(Lesson.id.desc()).first()
+    session.close()
     if not lesson:
         return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
-    # Pokus o volání přes Twilio (pseudo-logika)
     try:
         from app.services.twilio_service import TwilioService
         twilio = TwilioService()
-        # Zde by bylo volání: twilio.call_user(user, lesson)
-        # Prozatím pouze simulace
-        print(f"Simulace volání uživateli {user.name} ({user.phone}) s lekcí {lesson.title}")
+        base_url = os.getenv("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app")
+        webhook_url = f"{base_url}/voice/?attempt_id={user.id}"
+        twilio.call(user.phone, webhook_url)
     except Exception as e:
         print(f"Chyba při volání Twilio: {e}")
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
