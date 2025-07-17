@@ -1,4 +1,4 @@
-from flask import Blueprint, request, Response, url_for
+from flask import Blueprint, request, Response, url_for, current_app
 from app.services.twilio_service import TwilioService
 from app.services.openai_service import OpenAIService
 from app.services.realtime_service import handle_media_stream_websocket
@@ -134,7 +134,8 @@ def voice():
                     )
                     
                     # Přesměrování na OpenAI Realtime endpoint
-                    response.redirect(f"https://lecture-app-296578790242.europe-west1.run.app/voice/openai-realtime?attempt_id={attempt_id}")
+                    base_url = current_app.config.get("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app")
+                    response.redirect(f"{base_url}/voice/openai-realtime?attempt_id={attempt_id}")
                 else:
                     response.say(
                         "Lekce nebyla nalezena. Zkuste to prosím znovu.",
@@ -160,7 +161,8 @@ def voice():
             )
             
             # Přesměrování na OpenAI Realtime endpoint bez attempt_id
-            response.redirect("https://lecture-app-296578790242.europe-west1.run.app/voice/openai-realtime")
+            base_url = current_app.config.get("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app")
+            response.redirect(f"{base_url}/voice/openai-realtime")
         
         return Response(str(response), mimetype='text/xml')
         
