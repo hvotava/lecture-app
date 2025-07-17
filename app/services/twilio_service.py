@@ -10,7 +10,6 @@ import re
 import html
 import xml.etree.ElementTree as ET
 import sys
-from flask import url_for
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +236,7 @@ class TwilioService:
                 input='speech',  # Pouze hlasový vstup
                 timeout=5,  # Kratší timeout pro rychlejší reakci
                 speech_timeout='auto',
-                action=url_for('voice.chat', _external=True),
+                action=None, # url_for('voice.chat', _external=True), # SMAZAT
                 method='POST',
                 speech_model='phone_call',  # Optimalizováno pro telefonní hovory
                 enhanced='true',  # Vylepšené rozpoznávání řeči
@@ -296,7 +295,7 @@ class TwilioService:
                 input='speech',  # Pouze hlasový vstup
                 timeout=5,  # Kratší timeout pro rychlejší reakci
                 speech_timeout='auto',
-                action=url_for('voice.voice', _external=True, attempt_id=attempt_id) if attempt_id else None,
+                action=None, # url_for('voice.voice', _external=True, attempt_id=attempt_id) if attempt_id else None, # SMAZAT
                 method='POST',
                 speech_model='phone_call',  # Optimalizováno pro telefonní hovory
                 enhanced='true',  # Vylepšené rozpoznávání řeči
