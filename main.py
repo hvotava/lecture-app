@@ -246,7 +246,7 @@ def admin_network_test():
     # Test HTTP
     try:
         response = requests.get('https://httpbin.org/ip', timeout=10)
-        results['http_test'] = f'OK - IP: {response.json().get('origin', 'unknown')}'
+        results['http_test'] = f"OK - IP: {response.json().get('origin', 'unknown')}"
     except Exception as e:
         results['http_test'] = f'CHYBA: {str(e)}'
     return results
