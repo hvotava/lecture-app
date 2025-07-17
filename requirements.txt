@@ -4,4 +4,5 @@ sqlalchemy
 openai
 twilio
 python-dotenv
+psycopg2-binary
 # ... další závislosti dle původního requirements.txt
