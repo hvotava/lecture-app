@@ -4,51 +4,37 @@
 <div class="container">
     <div class="row justify-content-center">
         <div class="col-md-8">
-            <h1 class="mb-4">{% if form.title.data %}Upravit{% else %}Nová{% endif %} lekce</h1>
-            
+            <h1 class="mb-4">{% if lesson %}Upravit{% else %}Nová{% endif %} lekce</h1>
             <form method="post">
-                {{ form.csrf_token }}
-                
+                <!-- CSRF token není potřeba ve FastAPI -->
                 <div class="mb-3">
-                    {{ form.title.label(class="form-label") }}
-                    {{ form.title(class="form-control") }}
-                    {% if form.title.errors %}
-                    <div class="invalid-feedback d-block">
-                        {% for error in form.title.errors %}
-                        {{ error }}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
+                    <label for="title" class="form-label">Název</label>
+                    <input type="text" class="form-control" id="title" name="title" value="{{ form.title }}">
+                    {% for error in form['title.errors'] %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
                 </div>
-                
                 <div class="mb-3">
-                    {{ form.language.label(class="form-label") }}
-                    {{ form.language(class="form-select") }}
-                    {% if form.language.errors %}
-                    <div class="invalid-feedback d-block">
-                        {% for error in form.language.errors %}
-                        {{ error }}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
+                    <label for="language" class="form-label">Jazyk</label>
+                    <select class="form-select" id="language" name="language">
+                        <option value="cs" {% if form.language == 'cs' %}selected{% endif %}>Čeština</option>
+                        <option value="en" {% if form.language == 'en' %}selected{% endif %}>Angličtina</option>
+                    </select>
+                    {% for error in form['language.errors'] %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
                 </div>
-                
                 <div class="mb-3">
-                    {{ form.script.label(class="form-label") }}
-                    {{ form.script(class="form-control", rows=10) }}
-                    {% if form.script.errors %}
-                    <div class="invalid-feedback d-block">
-                        {% for error in form.script.errors %}
-                        {{ error }}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
+                    <label for="script" class="form-label">Skript</label>
+                    <textarea class="form-control" id="script" name="script" rows="10">{{ form.script }}</textarea>
+                    {% for error in form['script.errors'] %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
                 </div>
-                
                 <div class="mb-3">
-                    {{ form.questions.label(class="form-label") }}
+                    <label for="questions" class="form-label">Otázky (JSON)</label>
                     <div class="input-group">
-                        {{ form.questions(class="form-control", rows=5) }}
+                        <textarea class="form-control" id="questions" name="questions" rows="5">{{ form.questions }}</textarea>
                         <button type="button" class="btn btn-outline-primary" onclick="generateQuestions()">
                             Vygenerovat otázky pomocí AI
                         </button>
@@ -56,58 +42,41 @@
                     <div class="form-text">
                         Zadejte JSON ve formátu: {"current": "Otázka?", "answer": "Správná odpověď"}
                     </div>
-                    {% if form.questions.errors %}
-                    <div class="invalid-feedback d-block">
-                        {% for error in form.questions.errors %}
-                        {{ error }}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
+                    {% for error in form['questions.errors'] %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
                 </div>
-
                 <div class="d-flex justify-content-between">
-                    <a href="{{ url_for('admin.list_lessons') }}" class="btn btn-outline-secondary">Zpět</a>
+                    <a href="{{ request.url_for('admin_list_lessons') }}" class="btn btn-outline-secondary">Zpět</a>
                     <button type="submit" class="btn btn-primary">Uložit</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
 <script>
 async function generateQuestions() {
     const script = document.getElementById('script').value;
     const language = document.getElementById('language').value;
-    
     if (!script) {
         alert('Nejprve zadejte text skriptu');
         return;
     }
-    
     try {
         const response = await fetch('/admin/lessons/generate-questions', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token() }}'
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({ script, language })
         });
-        
         const data = await response.json();
-        
         if (data.error) {
             alert(data.error);
             return;
         }
-        
         // Vyber první otázku jako aktuální
-        const questions = {
-            current: data.questions[0].question,
-            answer: data.questions[0].answer,
-            all: data.questions
-        };
-        
+        const questions = data.questions;
         document.getElementById('questions').value = JSON.stringify(questions, null, 2);
     } catch (error) {
         alert('Chyba při generování otázek: ' + error);

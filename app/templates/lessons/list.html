@@ -3,7 +3,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Lekce</h1>
-    <a href="{{ url_for('admin.new_lesson') }}" class="btn btn-primary">Nová lekce</a>
+    <a href="{{ request.url_for('admin_new_lesson_get') }}" class="btn btn-primary">Nová lekce</a>
 </div>
 
 <div class="table-responsive">
@@ -21,9 +21,9 @@
             <tr>
                 <td>{{ lesson.title }}</td>
                 <td>{{ lesson.language }}</td>
-                <td>{{ lesson.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>{{ lesson.created_at.strftime('%d.%m.%Y %H:%M') if lesson.created_at else '' }}</td>
                 <td>
-                    <a href="{{ url_for('admin.edit_lesson', id=lesson.id) }}" class="btn btn-sm btn-outline-primary">
+                    <a href="{{ request.url_for('admin_edit_lesson_get', id=lesson.id) }}" class="btn btn-sm btn-outline-primary">
                         Upravit
                     </a>
                 </td>

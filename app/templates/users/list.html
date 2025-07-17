@@ -5,7 +5,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Seznam uživatelů</h1>
-    <a href="{{ url_for('admin.new_user') }}" class="btn btn-primary">Nový uživatel</a>
+    <a href="{{ request.url_for('admin_new_user_get') }}" class="btn btn-primary">Nový uživatel</a>
 </div>
 
 <div class="table-responsive">
@@ -30,13 +30,11 @@
                 <td>{{ user.detail }}</td>
                 <td>
                     <div class="btn-group">
-                        <a href="{{ url_for('admin.edit_user', id=user.id) }}" class="btn btn-sm btn-warning">Upravit</a>
-                        <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="POST" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <a href="{{ request.url_for('admin_edit_user_get', id=user.id) }}" class="btn btn-sm btn-warning">Upravit</a>
+                        <form action="{{ request.url_for('admin_delete_user', user_id=user.id) }}" method="post" class="d-inline">
                             <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Opravdu chcete smazat tohoto uživatele?')">Smazat</button>
                         </form>
-                        <form action="{{ url_for('admin.call_user', user_id=user.id) }}" method="POST" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <form action="{{ request.url_for('admin_call_user', user_id=user.id) }}" method="post" class="d-inline">
                             <button type="submit" class="btn btn-sm btn-success">Zavolat</button>
                         </form>
                     </div>

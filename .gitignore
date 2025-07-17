@@ -30,4 +30,4 @@ instance/
 *.log
 
 # Railway specific
-.railway/ 
+.railway/ .env.backup

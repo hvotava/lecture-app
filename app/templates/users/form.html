@@ -11,50 +11,40 @@
             </div>
             <div class="card-body">
                 <form method="POST">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    
+                    <!-- CSRF token není potřeba ve FastAPI defaultně -->
                     <div class="mb-3">
-                        {{ form.name.label(class="form-label") }}
-                        {{ form.name(class="form-control") }}
-                        {% if form.name.errors %}
-                            {% for error in form.name.errors %}
-                                <div class="text-danger">{{ error }}</div>
-                            {% endfor %}
-                        {% endif %}
+                        <label for="name" class="form-label">Jméno</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ form.name }}">
+                        {% for error in form['name.errors'] %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
                     </div>
-
                     <div class="mb-3">
-                        {{ form.phone.label(class="form-label") }}
-                        {{ form.phone(class="form-control") }}
-                        {% if form.phone.errors %}
-                            {% for error in form.phone.errors %}
-                                <div class="text-danger">{{ error }}</div>
-                            {% endfor %}
-                        {% endif %}
+                        <label for="phone" class="form-label">Telefon</label>
+                        <input type="text" class="form-control" id="phone" name="phone" value="{{ form.phone }}">
+                        {% for error in form['phone.errors'] %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
                     </div>
-
                     <div class="mb-3">
-                        {{ form.language.label(class="form-label") }}
-                        {{ form.language(class="form-select") }}
-                        {% if form.language.errors %}
-                            {% for error in form.language.errors %}
-                                <div class="text-danger">{{ error }}</div>
-                            {% endfor %}
-                        {% endif %}
+                        <label for="language" class="form-label">Jazyk</label>
+                        <select class="form-select" id="language" name="language">
+                            <option value="cs" {% if form.language == 'cs' %}selected{% endif %}>Čeština</option>
+                            <option value="en" {% if form.language == 'en' %}selected{% endif %}>Angličtina</option>
+                        </select>
+                        {% for error in form['language.errors'] %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
                     </div>
-
                     <div class="mb-3">
-                        {{ form.detail.label(class="form-label") }}
-                        {{ form.detail(class="form-control", rows=3) }}
-                        {% if form.detail.errors %}
-                            {% for error in form.detail.errors %}
-                                <div class="text-danger">{{ error }}</div>
-                            {% endfor %}
-                        {% endif %}
+                        <label for="detail" class="form-label">Detail</label>
+                        <textarea class="form-control" id="detail" name="detail" rows="3">{{ form.detail }}</textarea>
+                        {% for error in form['detail.errors'] %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
                     </div>
-
                     <div class="d-flex justify-content-between">
-                        <a href="{{ url_for('admin.list_users') }}" class="btn btn-secondary">Zpět</a>
+                        <a href="{{ request.url_for('admin_list_users') }}" class="btn btn-secondary">Zpět</a>
                         <button type="submit" class="btn btn-primary">Uložit</button>
                     </div>
                 </form>
