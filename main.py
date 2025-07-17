@@ -478,6 +478,7 @@ async def voice(request: Request, attempt_id: str = Query(None)):
 async def media_stream(websocket: WebSocket):
     logger.info("Přijat WebSocket na /voice/media-stream")
     await websocket.accept()
+    logger.info("WebSocket accepted, čekám na data z Twilia...")
     
     # Inicializace služeb
     from app.services.openai_service import OpenAIService
@@ -503,8 +504,10 @@ async def media_stream(websocket: WebSocket):
         # Načtení parametrů z URL
         query_params = websocket.query_params
         attempt_id = query_params.get("attempt_id")
+        logger.info(f"WebSocket query params: {query_params}")
         
         if attempt_id:
+            logger.info(f"Načítám attempt_id: {attempt_id}")
             # Načtení pokusu z databáze
             session = SessionLocal()
             attempt = session.query(Attempt).get(int(attempt_id))
@@ -527,14 +530,16 @@ async def media_stream(websocket: WebSocket):
             session.close()
         
         # Úvodní hláška
+        logger.info("Odesílám úvodní TwiML odpověď Twiliu")
         await send_twiml_response(websocket, twilio_service.create_introduction_response(
             conversation_state["lesson"] if conversation_state["lesson"] else None
         ))
         
         while True:
+            logger.info("Čekám na zprávu z Twilia...")
             # Přijetí dat z Twilio
             data = await websocket.receive_text()
-            logger.info(f"Přijato z Twilia: {data[:200]}")
+            logger.info(f"Přijato z Twilia: {data}")
             
             # Parsování JSON z Twilio Media Streams
             try:
@@ -583,11 +588,13 @@ async def media_stream(websocket: WebSocket):
                 logger.error(f"Chyba při zpracování dat: {e}")
                 
     except WebSocketDisconnect:
-        logger.info("WebSocket odpojen Twiliem")
+        logger.info("WebSocket odpojen Twiliem (WebSocketDisconnect)")
         # Uložení výsledků
         await save_conversation_results(conversation_state)
     except Exception as e:
         logger.error(f"Chyba ve WebSocket handleru: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         await websocket.close()
 
 async def process_audio_and_respond(websocket, conversation_state, openai_service, twilio_service):
