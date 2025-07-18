@@ -18,6 +18,10 @@ from sqlalchemy import text
 import os
 from datetime import datetime
 from app.database import SessionLocal
+import base64
+import json
+import io
+import openai
 
 load_dotenv()
 
@@ -496,7 +500,14 @@ async def audio_stream(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             logger.info(f"Přijato z Twilia (audio): {data[:200]}")
-            # Zde můžeš implementovat napojení na OpenAI/Whisper/AI backend
+            try:
+                msg = json.loads(data)
+                if msg.get("event") == "media":
+                    payload = msg["media"]["payload"]
+                    audio_bytes = base64.b64decode(payload)
+                    # ZDE: pošli audio_bytes do OpenAI Whisper nebo jiného AI backendu
+            except Exception as e:
+                logger.error(f"Chyba při zpracování zprávy: {e}")
     except WebSocketDisconnect:
         logger.info("WebSocket /audio odpojen Twiliem")
     except Exception as e:
