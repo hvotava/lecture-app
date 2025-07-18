@@ -383,7 +383,7 @@ class TwilioService:
         connect = Connect()
         stream = Stream(
             url="wss://lecture-app-production.up.railway.app/voice/media-stream",
-            track="both_tracks"
+            track="both"
         )
         connect.append(stream)
         response.append(connect)
@@ -415,7 +415,7 @@ class TwilioService:
         connect = Connect()
         stream = Stream(
             url="wss://lecture-app-production.up.railway.app/voice/media-stream",
-            track="both_tracks"
+            track="both"
         )
         connect.append(stream)
         response.append(connect)
@@ -437,7 +437,7 @@ class TwilioService:
         connect = Connect()
         stream = Stream(
             url="wss://lecture-app-production.up.railway.app/voice/media-stream",
-            track="both_tracks"
+            track="both"
         )
         connect.append(stream)
         response.append(connect)
@@ -466,7 +466,7 @@ class TwilioService:
         connect = Connect()
         stream = Stream(
             url="wss://lecture-app-production.up.railway.app/voice/media-stream",
-            track="both_tracks"
+            track="both"
         )
         connect.append(stream)
         response.append(connect)
@@ -489,7 +489,7 @@ class TwilioService:
         connect = Connect()
         stream = Stream(
             url="wss://lecture-app-production.up.railway.app/voice/media-stream",
-            track="both_tracks"
+            track="both"
         )
         connect.append(stream)
         response.append(connect)

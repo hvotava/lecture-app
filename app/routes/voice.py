@@ -138,7 +138,7 @@ def voice():
                     connect = Connect()
                     stream = Stream(
                         url=f"wss://{request.host}/voice/media-stream?attempt_id={attempt_id}",
-                        track="both_tracks"
+                        track="both"
                     )
                     connect.append(stream)
                     response.append(connect)
@@ -168,7 +168,7 @@ def voice():
             connect = Connect()
             stream = Stream(
                 url=f"wss://{request.host}/voice/media-stream",
-                track="both_tracks"
+                track="both"
             )
             connect.append(stream)
             response.append(connect)
@@ -831,7 +831,7 @@ def openai_realtime():
         connect = Connect()
         stream = Stream(
             url=f"wss://{request.host}/voice/media-stream?attempt_id={attempt_id}",
-            track="both_tracks"  # Opraveno na správnou hodnotu
+            track="both"
         )
         connect.append(stream)
         response.append(connect)
