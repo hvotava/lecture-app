@@ -414,7 +414,7 @@ async def voice(request: Request, attempt_id: str = Query(None)):
 <Response>
     <Say language=\"cs-CZ\" rate=\"0.9\" voice=\"Google.cs-CZ-Standard-A\">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Start>
-        <Stream url=\"wss://lecture-app-production.up.railway.app/audio\" track=\"both_tracks\" />
+        <Stream url=\"wss://lecture-app-production.up.railway.app/audio\" track=\"both\" />
     </Start>
 </Response>
 """
@@ -430,7 +430,7 @@ async def voice_start_stream(request: Request):
         Vítejte u AI asistenta pro výuku jazyků.
     </Say>
     <Start>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both_tracks" />
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both" />
     </Start>
 </Response>
 """
