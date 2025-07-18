@@ -410,83 +410,28 @@ def health():
 async def voice(request: Request, attempt_id: str = Query(None)):
     logger.info("Přijat Twilio webhook na /voice/")
     logger.info(f"Attempt ID: {attempt_id}")
-    response = VoiceResponse()
-    response.say(
-        "Vítejte u AI asistenta pro výuku jazyků.",
-        language="cs-CZ",
-        voice="Google.cs-CZ-Standard-A",
-        rate="0.9"
-    )
-    if attempt_id:
-        # Zde by mělo být načtení lekce z DB, pro demo použijeme placeholder
-        try:
-            # attempt = Attempt.query.get(attempt_id)  # TODO: async DB
-            # if attempt and attempt.lesson:
-            #     lesson = attempt.lesson
-            lesson = None  # TODO: nahradit skutečnou lekcí
-            if lesson:
-                response.say(
-                    f"Začínáme s lekcí: {lesson.title}",
-                    language="cs-CZ",
-                    voice="Google.cs-CZ-Standard-A",
-                    rate="0.9"
-                )
-                response.pause(length=1)
-                response.say(
-                    f"Téma lekce: {lesson.script[:200]}...",
-                    language="cs-CZ",
-                    voice="Google.cs-CZ-Standard-A",
-                    rate="0.8"
-                )
-                response.pause(length=1)
-            response.say(
-                "Nyní vás připojuji k AI asistentovi, se kterým si můžete povídat o lekci.",
-                language="cs-CZ",
-                voice="Google.cs-CZ-Standard-A",
-                rate="0.9"
-            )
-            connect = Connect()
-            stream = Stream(
-                url=f"wss://lecture-app-production.up.railway.app/voice/media-stream?attempt_id={attempt_id}",
-                track="both"
-            )
-            connect.append(stream)
-            response.append(connect)
-        except Exception as e:
-            logger.error(f"Chyba při načítání lekce: {str(e)}")
-            response.say(
-                "Došlo k chybě při načítání lekce. Zkuste to prosím znovu.",
-                language="cs-CZ",
-                voice="Google.cs-CZ-Standard-A"
-            )
-            response.hangup()
-    else:
-        response.say(
-            "Připojuji vás k AI asistentovi pro obecnou konverzaci.",
-            language="cs-CZ",
-            voice="Google.cs-CZ-Standard-A",
-            rate="0.9"
-        )
-        connect = Connect()
-        stream = Stream(
-            url=f"wss://lecture-app-production.up.railway.app/voice/media-stream",
-            track="both"
-        )
-        connect.append(stream)
-        response.append(connect)
-    logger.info("TwiML odpověď:")
-    logger.info(str(response))
-    return Response(content=str(response), media_type="text/xml")
-
-@app.post("/voice/start-stream/")
-async def voice_start_stream(request: Request):
-    """TwiML odpověď s <Start><Stream> pro Media Streams (obousměrně)."""
     response = """
 <?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <Response>
     <Say language=\"cs-CZ\" rate=\"0.9\" voice=\"Google.cs-CZ-Standard-A\">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Start>
         <Stream url=\"wss://lecture-app-production.up.railway.app/audio\" track=\"both_tracks\" />
+    </Start>
+</Response>
+"""
+    return Response(content=response, media_type="text/xml")
+
+@app.post("/voice/start-stream/")
+async def voice_start_stream(request: Request):
+    """TwiML odpověď s <Start><Stream> pro Media Streams (obousměrně)."""
+    response = """
+<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">
+        Vítejte u AI asistenta pro výuku jazyků.
+    </Say>
+    <Start>
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both_tracks" />
     </Start>
 </Response>
 """
