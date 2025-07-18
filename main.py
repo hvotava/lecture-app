@@ -474,6 +474,35 @@ async def voice(request: Request, attempt_id: str = Query(None)):
     logger.info(str(response))
     return Response(content=str(response), media_type="text/xml")
 
+@app.post("/voice/start-stream/")
+async def voice_start_stream(request: Request):
+    """TwiML odpověď s <Start><Stream> pro Media Streams (obousměrně)."""
+    response = """
+<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<Response>
+    <Say language=\"cs-CZ\" rate=\"0.9\" voice=\"Google.cs-CZ-Standard-A\">Vítejte u AI asistenta pro výuku jazyků.</Say>
+    <Start>
+        <Stream url=\"wss://lecture-app-production.up.railway.app/audio\" track=\"both_tracks\" />
+    </Start>
+</Response>
+"""
+    return Response(content=response, media_type="text/xml")
+
+@app.websocket("/audio")
+async def audio_stream(websocket: WebSocket):
+    logger.info("Přijat WebSocket na /audio (Start/Stream)")
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            logger.info(f"Přijato z Twilia (audio): {data[:200]}")
+            # Zde můžeš implementovat napojení na OpenAI/Whisper/AI backend
+    except WebSocketDisconnect:
+        logger.info("WebSocket /audio odpojen Twiliem")
+    except Exception as e:
+        logger.error(f"Chyba ve WebSocket /audio: {e}")
+        await websocket.close()
+
 @app.websocket("/voice/media-stream")
 async def media_stream(websocket: WebSocket):
     logger.info("Přijat WebSocket na /voice/media-stream")
