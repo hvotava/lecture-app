@@ -119,10 +119,10 @@ def create_app() -> Flask:
         # Registrace blueprintů
         logger.info("Registruji blueprinty")
         from app.routes.admin import bp as admin_bp
-        from app.routes.voice import voice_bp
+        # from app.routes.voice import voice_bp
 
         app.register_blueprint(admin_bp, url_prefix='/')
-        app.register_blueprint(voice_bp, url_prefix='/voice')
+        # app.register_blueprint(voice_bp)
 
         # CSRF konfigurace pro Twilio webhooky
         csrf.exempt(voice_bp)
