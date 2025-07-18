@@ -410,8 +410,7 @@ def health():
 async def voice(request: Request, attempt_id: str = Query(None)):
     logger.info("Přijat Twilio webhook na /voice/")
     logger.info(f"Attempt ID: {attempt_id}")
-    response = """
-<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+    response = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <Response>
     <Say language=\"cs-CZ\" rate=\"0.9\" voice=\"Google.cs-CZ-Standard-A\">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Start>
