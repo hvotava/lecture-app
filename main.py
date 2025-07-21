@@ -410,14 +410,14 @@ def health():
 async def voice(request: Request, attempt_id: str = Query(None)):
     logger.info("Přijat Twilio webhook na /voice/")
     logger.info(f"Attempt ID: {attempt_id}")
-    response = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+    response = """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say language=\"cs-CZ\" rate=\"0.9\" voice=\"Google.cs-CZ-Standard-A\">Vítejte u AI asistenta pro výuku jazyků.</Say>
+    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Start>
-        <Stream url=\"wss://lecture-app-production.up.railway.app/audio\" track=\"both\" />
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both" />
     </Start>
-</Response>
-"""
+</Response>"""
+    logger.info(f"TwiML odpověď: {response}")
     return Response(content=response, media_type="text/xml")
 
 @app.post("/voice/start-stream/")

@@ -34,4 +34,4 @@ CMD sh -c 'echo "=== STARTING APPLICATION ===" && \
     echo "Files in current directory:" && \
     ls -la && \
     echo "=== STARTING UVICORN ===" && \
-    uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --log-level debug'
+    uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --log-level debug --ws auto'
