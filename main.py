@@ -415,7 +415,7 @@ async def voice(request: Request, attempt_id: str = Query(None)):
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
     <Connect>
-        <Stream url="wss://lecture-app-production.up.railway.app/voice/media-stream?attempt_id=1" track="both" />
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both" />
     </Connect>
 </Response>"""
     logger.info(f"TwiML odpověď: {response}")
@@ -439,20 +439,44 @@ async def voice_start_stream(request: Request):
 
 @app.websocket("/audio")
 async def audio_stream(websocket: WebSocket):
-    logger.info("Přijat WebSocket na /audio (Start/Stream)")
+    logger.info("=== AUDIO WEBSOCKET HANDLER SPUŠTĚN ===")
+    logger.info(f"WebSocket client: {websocket.client}")
+    logger.info(f"WebSocket headers: {websocket.headers}")
+    logger.info(f"WebSocket query params: {websocket.query_params}")
+    
     await websocket.accept()
+    logger.info("=== WEBSOCKET /AUDIO ACCEPTED - ČEKÁM NA TWILIO DATA ===")
+    
     try:
         while True:
             data = await websocket.receive_text()
-            logger.info(f"Přijato z Twilia (audio): {data[:200]}")
+            logger.info(f"=== PŘIJATO Z TWILIA (/audio): {data[:300]} ===")
+            
             try:
                 msg = json.loads(data)
-                if msg.get("event") == "media":
+                event = msg.get("event")
+                logger.info(f"Twilio event: {event}")
+                
+                if event == "start":
+                    logger.info("Media Stream zahájen!")
+                    stream_sid = msg.get("streamSid")
+                    logger.info(f"Stream SID: {stream_sid}")
+                    
+                elif event == "media":
                     payload = msg["media"]["payload"]
+                    logger.info(f"Audio data received, length: {len(payload)}")
                     audio_bytes = base64.b64decode(payload)
-                    # ZDE: pošli audio_bytes do OpenAI Whisper nebo jiného AI backendu
+                    # TODO: Zpracování audia přes OpenAI Whisper
+                    
+                elif event == "stop":
+                    logger.info("Media Stream ukončen")
+                    break
+                    
+            except json.JSONDecodeError as e:
+                logger.error(f"Neplatný JSON z Twilia: {e}")
             except Exception as e:
                 logger.error(f"Chyba při zpracování zprávy: {e}")
+                
     except WebSocketDisconnect:
         logger.info("WebSocket /audio odpojen Twiliem")
     except Exception as e:
