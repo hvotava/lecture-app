@@ -413,10 +413,11 @@ async def voice(request: Request, attempt_id: str = Query(None)):
     response = """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
-    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
-    <Connect>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both" />
-    </Connect>
+    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Toto je test. Pokud slyšíte tuto zprávu, webhook funguje správně.</Say>
+    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Za chvilku hovor ukončím.</Say>
+    <Pause length="3"/>
+    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Děkujeme za volání. Na shledanou.</Say>
+    <Hangup/>
 </Response>"""
     logger.info(f"TwiML odpověď: {response}")
     return Response(content=response, media_type="text/xml")
