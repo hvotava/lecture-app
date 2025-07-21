@@ -413,9 +413,8 @@ async def voice(request: Request, attempt_id: str = Query(None)):
     response = """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
-    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
     <Connect>
-        <Stream url="wss://lecture-app-production.up.railway.app/voice/media-stream?attempt_id=1" track="both" />
+        <Stream url="wss://lecture-app-production.up.railway.app/voice/media-stream" track="both" />
     </Connect>
 </Response>"""
     logger.info(f"TwiML odpověď: {response}")
@@ -461,9 +460,13 @@ async def audio_stream(websocket: WebSocket):
 
 @app.websocket("/voice/media-stream")
 async def media_stream(websocket: WebSocket):
-    logger.info("Přijat WebSocket na /voice/media-stream")
+    logger.info("=== MEDIA STREAM WEBSOCKET HANDLER SPUŠTĚN ===")
+    logger.info(f"WebSocket client: {websocket.client}")
+    logger.info(f"WebSocket headers: {websocket.headers}")
+    logger.info(f"WebSocket query params: {websocket.query_params}")
+    
     await websocket.accept()
-    logger.info("WebSocket accepted, čekám na data z Twilia...")
+    logger.info("=== WEBSOCKET ACCEPTED - ČEKÁM NA TWILIO DATA ===")
     
     # Inicializace služeb
     from app.services.openai_service import OpenAIService
