@@ -428,7 +428,7 @@ async def root_post(request: Request, attempt_id: str = Query(None)):
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
     <Connect>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both" />
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
     </Connect>
 </Response>"""
     logger.info(f"TwiML odpověď z ROOT: {response}")
@@ -437,6 +437,21 @@ async def root_post(request: Request, attempt_id: str = Query(None)):
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "lecture-app"}
+
+@app.post("/stream-callback")
+async def stream_callback(request: Request):
+    """Twilio Stream statusCallback endpoint - pouze potvrzení HTTP 200"""
+    logger.info("Přijat Twilio Stream statusCallback")
+    
+    # Logování pro debugging
+    try:
+        form_data = await request.form()
+        logger.info(f"Stream callback data: {dict(form_data)}")
+    except:
+        pass
+    
+    # Pouze HTTP 200 odpověď, žádné TwiML
+    return {"status": "ok"}
 
 @app.post("/voice/")
 async def voice(request: Request, attempt_id: str = Query(None)):
@@ -447,7 +462,7 @@ async def voice(request: Request, attempt_id: str = Query(None)):
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
     <Connect>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both" />
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
     </Connect>
 </Response>"""
     logger.info(f"TwiML odpověď: {response}")
