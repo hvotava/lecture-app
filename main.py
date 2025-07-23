@@ -528,14 +528,14 @@ async def voice(request: Request, attempt_id: str = Query(None)):
         voice="Google.cs-CZ-Standard-A"
     )
     
-    # Konfigurace Media Streamu
+    # Konfigurace Media Streamu - použití Start místo Connect pro obousměrný stream
     start = response.start()
     start.stream(
         url="wss://lecture-app-production.up.railway.app/audio",
-        track="both_tracks",  # Správná hodnota podle Twilio dokumentace
+        track="both_tracks",  # Explicitně nastavíme obousměrný stream
         status_callback="https://lecture-app-production.up.railway.app/stream-callback",
         status_callback_method="POST",
-        name="ai_assistant_stream"  # Přidáno pro lepší identifikaci streamu
+        name="ai_assistant_stream"
     )
     
     # Dlouhá pauza pro udržení hovoru
@@ -703,13 +703,8 @@ async def audio_stream(websocket: WebSocket):
                                             "event": "media",
                                             "streamSid": stream_sid,
                                             "media": {
-                                                "track": "outbound",
-                                                "chunk": "audio",
-                                                "payload": base64.b64encode(chunk).decode('utf-8'),
-                                                "timestamp": int(time.time() * 1000),
-                                                "contentType": "audio/mulaw",
-                                                "sampleRate": 8000,
-                                                "channels": 1
+                                                "track": "outbound",  # Explicitně označíme jako outbound
+                                                "payload": base64.b64encode(chunk).decode('utf-8')
                                             }
                                         }
                                         await safe_send_text(json.dumps(media_message))
@@ -723,13 +718,8 @@ async def audio_stream(websocket: WebSocket):
                                     "event": "media",
                                     "streamSid": stream_sid,
                                     "media": {
-                                        "track": "outbound",
-                                        "chunk": "audio",
-                                        "payload": payload,
-                                        "timestamp": int(time.time() * 1000),
-                                        "contentType": "audio/mulaw",
-                                        "sampleRate": 8000,
-                                        "channels": 1
+                                        "track": "outbound",  # Explicitně označíme jako outbound
+                                        "payload": payload
                                     }
                                 }
                                 await safe_send_text(json.dumps(media_message))
