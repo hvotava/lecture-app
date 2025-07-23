@@ -614,18 +614,20 @@ async def audio_stream(websocket: WebSocket):
                         last_audio_time = datetime.now()
                         logger.info(f"[AUDIO-CHUNK] Inbound audio chunk #{seq}, buffer: {len(inbound_buffer)} bytes")
 
-                        if len(inbound_buffer) > 2400:  # 0.3s audia
-                            buffer_copy = bytes(inbound_buffer)
-                            inbound_buffer.clear()
+                        # Rozdělíme buffer na 160B chunky
+                        while len(inbound_buffer) >= 160:
+                            chunk = inbound_buffer[:160]
+                            remaining = inbound_buffer[160:]
+                            inbound_buffer = bytearray(remaining)
                             
-                            # Odeslání audia do OpenAI Realtime API
+                            # Odeslání 160B chunku do OpenAI Realtime API
                             try:
                                 media_message = {
                                     "type": "input_audio_buffer.append",
-                                    "audio": base64.b64encode(buffer_copy).decode('utf-8')
+                                    "audio": base64.b64encode(chunk).decode('utf-8')
                                 }
                                 await safe_send_text(json.dumps(media_message))
-                                logger.info(f"[MEDIA] Inbound audio odesláno do OpenAI Realtime ({len(buffer_copy)} bytes)")
+                                logger.info(f"[MEDIA] Inbound audio chunk odeslán do OpenAI Realtime (160 bytes)")
                             except Exception as e:
                                 logger.error(f"Chyba při odesílání do OpenAI Realtime: {e}")
 
@@ -695,21 +697,40 @@ async def audio_stream(websocket: WebSocket):
                 elif event == "stop":
                     logger.info("Media Stream ukončen")
                     if inbound_buffer:  # Odešleme poslední inbound audio
-                        buffer_copy = bytes(inbound_buffer)
-                        try:
-                            media_message = {
-                                "type": "input_audio_buffer.append",
-                                "audio": base64.b64encode(buffer_copy).decode('utf-8')
-                            }
-                            await safe_send_text(json.dumps(media_message))
-                            logger.info(f"[MEDIA] Poslední inbound audio odesláno do OpenAI Realtime ({len(buffer_copy)} bytes)")
+                        # Rozdělíme zbývající buffer na 160B chunky
+                        while len(inbound_buffer) >= 160:
+                            chunk = inbound_buffer[:160]
+                            remaining = inbound_buffer[160:]
+                            inbound_buffer = bytearray(remaining)
+                            
+                            try:
+                                media_message = {
+                                    "type": "input_audio_buffer.append",
+                                    "audio": base64.b64encode(chunk).decode('utf-8')
+                                }
+                                await safe_send_text(json.dumps(media_message))
+                                logger.info(f"[MEDIA] Poslední inbound audio chunk odeslán do OpenAI Realtime (160 bytes)")
+                            except Exception as e:
+                                logger.error(f"Chyba při odesílání posledního audio chunku: {e}")
 
-                            # Vytvoříme poslední odpověď
-                            if not is_responding:
-                                await safe_send_text(json.dumps({"type": "response.create"}))
-                                logger.info("Vytvářím poslední odpověď")
-                        except Exception as e:
-                            logger.error(f"Chyba při odesílání posledního audia: {e}")
+                        # Pokud zbývá neúplný chunk, doplníme ho tichem
+                        if len(inbound_buffer) > 0:
+                            padding = bytearray([0xFF] * (160 - len(inbound_buffer)))  # 0xFF = ticho v μ-law
+                            inbound_buffer.extend(padding)
+                            try:
+                                media_message = {
+                                    "type": "input_audio_buffer.append",
+                                    "audio": base64.b64encode(bytes(inbound_buffer)).decode('utf-8')
+                                }
+                                await safe_send_text(json.dumps(media_message))
+                                logger.info(f"[MEDIA] Poslední doplněný chunk odeslán do OpenAI Realtime (160 bytes)")
+                            except Exception as e:
+                                logger.error(f"Chyba při odesílání posledního doplněného chunku: {e}")
+
+                        # Vytvoříme poslední odpověď
+                        if not is_responding:
+                            await safe_send_text(json.dumps({"type": "response.create"}))
+                            logger.info("Vytvářím poslední odpověď")
 
                     # Počkáme chvíli na dokončení odpovědi
                     await asyncio.sleep(2)
