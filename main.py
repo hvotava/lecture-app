@@ -534,13 +534,11 @@ async def voice_start_stream(request: Request):
 
 @app.websocket("/audio")
 async def audio_stream(websocket: WebSocket):
+    await websocket.accept()
     logger.info("=== AUDIO WEBSOCKET HANDLER SPUŠTĚN ===")
     logger.info(f"WebSocket client: {websocket.client}")
     logger.info(f"WebSocket headers: {websocket.headers}")
     logger.info(f"WebSocket query params: {websocket.query_params}")
-    
-    await websocket.accept()
-    logger.info("=== WEBSOCKET /AUDIO ACCEPTED - ČEKÁM NA TWILIO DATA ===")
     
     # Inicializace AI služeb
     try:
@@ -694,7 +692,7 @@ async def audio_stream(websocket: WebSocket):
                 }
             }
             try:
-                await websocket.send_text(json.dumps(media_message))
+                await safe_send_text(json.dumps(media_message))
                 logger.info("Audio odesláno do Twilia (po TTS)")
             except Exception as e:
                 logger.error(f"Chyba při odesílání audio: {e}")
@@ -705,7 +703,7 @@ async def audio_stream(websocket: WebSocket):
     
     try:
         # Pošleme potvrzení připojení
-        await websocket.send_text('{"event":"connected","protocol":"websocket","version":"1.0.0"}')
+        await safe_send_text('{"event":"connected","protocol":"websocket","version":"1.0.0"}')
         logger.info("Odesláno potvrzení připojení")
         
         # Periodické zpracování bufferu při tichu
@@ -842,6 +840,12 @@ async def media_stream(websocket: WebSocket):
         "last_audio_time": None
     }
     
+    async def safe_send_text(msg):
+        try:
+            await websocket.send_text(msg)
+        except Exception as e:
+            logger.error(f"[safe_send_text] WebSocket není připojen: {e}")
+
     try:
         # Načtení parametrů z URL
         query_params = websocket.query_params
