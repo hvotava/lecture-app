@@ -534,7 +534,10 @@ async def voice_start_stream(request: Request):
 
 @app.websocket("/audio")
 async def audio_stream(websocket: WebSocket):
+    print("=== WEBSOCKET /AUDIO HANDLER ZAVOLÁN ===")
+    logger.info("=== WEBSOCKET /AUDIO HANDLER ZAVOLÁN ===")
     await websocket.accept()
+    print("=== WEBSOCKET /AUDIO ACCEPTED ===")
     logger.info("=== AUDIO WEBSOCKET HANDLER SPUŠTĚN ===")
     logger.info(f"WebSocket client: {websocket.client}")
     logger.info(f"WebSocket headers: {websocket.headers}")
@@ -634,6 +637,21 @@ async def audio_stream(websocket: WebSocket):
             return
         try:
             logger.info(f"Zpracovávám audio buffer ({len(audio_bytes)} bytes)")
+            
+            # Pošleme mezitímní signál Twiliu (prázdný media chunk), aby vědělo, že jsme aktivní
+            try:
+                keepalive_message = {
+                    "event": "media",
+                    "streamSid": stream_sid,
+                    "media": {
+                        "payload": ""
+                    }
+                }
+                await safe_send_text(json.dumps(keepalive_message))
+                logger.info("Keepalive signál odeslán")
+            except Exception as e:
+                logger.warning(f"Chyba při keepalive: {e}")
+            
             # 1. Speech-to-Text pomocí Whisper
             import io
             audio_file = io.BytesIO()
@@ -659,12 +677,12 @@ async def audio_stream(websocket: WebSocket):
             logger.info(f"Transkripce: {user_text}")
             conversation_context.append({"role": "user", "content": user_text})
             # 2. Generování odpovědi pomocí GPT
-            system_prompt = f"""Jsi AI asistent pro výuku jazyků. {lesson_context}\n\nTvoje úkoly:\n- Pomáhej studentovi s lekcí\n- Odpovídej na otázky týkající se obsahu\n- Buď trpělivý a povzbuzující\n- Odpovídej stručně (max 2-3 věty)\n- Mluv česky"""
+            system_prompt = f"""Jsi AI asistent pro výuku jazyků. {lesson_context}\n\nTvoje úkoly:\n- Pomáhej studentovi s lekcí\n- Odpovídej na otázky týkající se obsahu\n- Buď trpělivý a povzbuzující\n- Odpovídej stručně (max 1-2 věty)\n- Mluv česky"""
             messages = [{"role": "system", "content": system_prompt}] + conversation_context[-10:]
             response = openai_service.client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=messages,
-                max_tokens=150,
+                max_tokens=50,
                 temperature=0.7
             )
             ai_response = response.choices[0].message.content
@@ -715,12 +733,12 @@ async def audio_stream(websocket: WebSocket):
         # Periodické zpracování bufferu při tichu
         async def silence_processor():
             while True:
-                await asyncio.sleep(0.5)  # Kontrola každou půlsekundu
+                await asyncio.sleep(0.3)  # Kontrola každé 0.3 sekundy - rychlejší
                 if last_audio_time and audio_buffer:
                     time_since_last = (datetime.now() - last_audio_time).total_seconds()
                     logger.info(f"[Ticho-check] Čas od posledního audia: {time_since_last:.2f}s, buffer: {len(audio_buffer)} bytes")
-                    # Pokud je v bufferu aspoň 0.5 sekundy audia nebo 0.5s ticha
-                    if len(audio_buffer) > 4000 or time_since_last > 0.5:
+                    # Pokud je v bufferu aspoň 0.3 sekundy audia nebo 0.3s ticha
+                    if len(audio_buffer) > 2400 or time_since_last > 0.3:
                         buffer_copy = bytes(audio_buffer)
                         audio_buffer.clear()
                         logger.info(f"[Ticho-check] Zpracovávám buffer ({len(buffer_copy)} bytes) po {time_since_last:.2f}s ticha")
@@ -778,8 +796,8 @@ async def audio_stream(websocket: WebSocket):
                             audio_buffer.extend(audio_bytes)
                             last_audio_time = datetime.now()
                             logger.info(f"[AUDIO-CHUNK] buffer po přidání: {len(audio_buffer)} bytes")
-                            # Zpracování po 0.5s audia (4000 bytes)
-                            if len(audio_buffer) > 4000:
+                            # Zpracování po 0.3s audia (2400 bytes) - rychlejší
+                            if len(audio_buffer) > 2400:
                                 buffer_copy = bytes(audio_buffer)
                                 audio_buffer.clear()
                                 logger.info(f"[MEDIA] Zpracovávám buffer ({len(buffer_copy)} bytes) po {seq} chunku")
