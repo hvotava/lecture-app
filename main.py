@@ -577,47 +577,74 @@ async def audio_stream(websocket: WebSocket):
     # Konfigurace session pro speech-to-speech
     try:
         await websocket.send_text(json.dumps({
-            "type": "session.update",
-            "session": {
-                "model": "tts-1",  # Správný model pro TTS
-                "voice": "alloy",
-                "input_audio_format": "g711_ulaw",
-                "output_audio_format": "g711_ulaw",
-                "input_audio_transcription": {
-                    "model": "whisper-1"
-                },
-                "turn_detection": {
-                    "type": "server_vad",
-                    "threshold": 0.5,
-                    "prefix_padding_ms": 300,
-                    "silence_duration_ms": 200,
-                    "create_response": True
-                }
+            "type": "speech.create",  # Správný typ pro generování řeči
+            "model": "tts-1",
+            "voice": "alloy",
+            "input": {
+                "text": "Ahoj! Jsem váš AI asistent pro výuku jazyků. Jak vám mohu pomoci?",
+                "format": "g711_ulaw",
+                "sample_rate": 8000,
+                "channels": 1
             }
         }))
-        logger.info("Session konfigurace odeslána")
-
-        # Odeslání úvodního pozdravu
-        await websocket.send_text(json.dumps({
-            "type": "text.generate",  # Správný typ zprávy pro generování textu
-            "text": "Ahoj! Jsem váš AI asistent pro výuku jazyků. Jak vám mohu pomoci?"
-        }))
         logger.info("Úvodní pozdrav odeslán")
+
+        # Konfigurace pro zpracování vstupu
+        await websocket.send_text(json.dumps({
+            "type": "transcription.configure",
+            "model": "whisper-1",
+            "language": "cs",
+            "response_format": "text",
+            "temperature": 0.7,
+            "prompt": "Konverzace v češtině o výuce jazyků."
+        }))
+        logger.info("Konfigurace transkripce odeslána")
+
+        # Nastavení detekce řeči
+        await websocket.send_text(json.dumps({
+            "type": "vad.configure",
+            "threshold": 0.5,
+            "min_speech_duration": 0.3,
+            "min_silence_duration": 0.5,
+            "speech_pad_ms": 300,
+            "silence_pad_ms": 200
+        }))
+        logger.info("Konfigurace VAD odeslána")
+
     except Exception as e:
-        logger.error(f"Chyba při konfiguraci session nebo odesílání pozdravu: {e}")
+        logger.error(f"Chyba při konfiguraci OpenAI: {e}")
         return
 
     # Stav konverzace
     stream_sid = None
     inbound_buffer = bytearray()  # Buffer pro příchozí audio (od uživatele)
     last_audio_time = None
-    is_responding = False  # Flag pro sledování, zda právě probíhá odpověď
+    is_responding = False
 
     async def safe_send_text(msg):
         try:
             await websocket.send_text(msg)
         except Exception as e:
             logger.error(f"[safe_send_text] WebSocket není připojen: {e}")
+
+    async def handle_speech_input(text: str):
+        """Zpracuje rozpoznaný text a vygeneruje odpověď."""
+        try:
+            # Generování odpovědi
+            await websocket.send_text(json.dumps({
+                "type": "speech.create",
+                "model": "tts-1",
+                "voice": "alloy",
+                "input": {
+                    "text": f"Rozumím, že říkáte: {text}. Moment prosím, zpracovávám odpověď.",
+                    "format": "g711_ulaw",
+                    "sample_rate": 8000,
+                    "channels": 1
+                }
+            }))
+            logger.info(f"Odpověď na vstup odeslána: {text}")
+        except Exception as e:
+            logger.error(f"Chyba při generování odpovědi: {e}")
 
     try:
         while True:
@@ -648,11 +675,14 @@ async def audio_stream(websocket: WebSocket):
                             remaining = inbound_buffer[160:]
                             inbound_buffer = bytearray(remaining)
                             
-                            # Odeslání 160B chunku do OpenAI Realtime API
+                            # Odeslání 160B chunku do OpenAI
                             try:
                                 media_message = {
-                                    "type": "input_audio_buffer.append",
-                                    "audio": base64.b64encode(chunk).decode('utf-8')
+                                    "type": "audio.append",  # Správný typ pro audio data
+                                    "audio": base64.b64encode(chunk).decode('utf-8'),
+                                    "format": "g711_ulaw",
+                                    "sample_rate": 8000,
+                                    "channels": 1
                                 }
                                 await safe_send_text(json.dumps(media_message))
                                 logger.info(f"[MEDIA] Inbound audio chunk odeslán do OpenAI Realtime (160 bytes)")

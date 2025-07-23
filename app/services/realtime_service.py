@@ -96,13 +96,9 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní.""",
                 
                 logger.debug(f"Zpráva z OpenAI: {message_type}")
                 
-                if message_type == 'session.created':
-                    self.session_id = data.get('session', {}).get('id')
-                    logger.info(f"OpenAI session vytvořena: {self.session_id}")
-                    
-                elif message_type == 'response.audio.delta':
+                if message_type == 'speech.chunk':
                     # Audio data z OpenAI
-                    audio_data = data.get('delta', '')
+                    audio_data = data.get('chunk', '')
                     if audio_data:
                         # Dekódování base64 audio dat
                         audio_bytes = base64.b64decode(audio_data)
@@ -110,42 +106,43 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní.""",
                         if audio_callback:
                             audio_callback(audio_bytes)
                             
-                elif message_type == 'response.audio.done':
-                    logger.info("OpenAI dokončilo audio odpověď")
+                elif message_type == 'speech.done':
+                    logger.info("OpenAI dokončilo generování řeči")
                     
-                elif message_type == 'response.text.delta':
-                    text_delta = data.get('delta', '')
-                    if text_delta:
-                        logger.info(f"Text z OpenAI: {text_delta}")
+                elif message_type == 'transcription.chunk':
+                    text = data.get('text', '')
+                    if text:
+                        logger.info(f"Transkripce: {text}")
                         
-                elif message_type == 'response.text.done':
-                    text_content = data.get('text', '')
-                    logger.info(f"Kompletní text odpověď: {text_content}")
+                elif message_type == 'transcription.done':
+                    text = data.get('text', '')
+                    logger.info(f"Kompletní transkripce: {text}")
                     
-                elif message_type == 'input_audio_buffer.speech_started':
-                    logger.info("OpenAI detekoval začátek řeči")
-                    
-                elif message_type == 'input_audio_buffer.speech_stopped':
-                    logger.info("OpenAI detekoval konec řeči")
-                    
-                elif message_type == 'conversation.item.input_audio_transcription.completed':
-                    transcript = data.get('transcript', '')
-                    logger.info(f"Transkripce uživatele: {transcript}")
-                    
+                    # Generování odpovědi
+                    try:
+                        response_message = {
+                            "type": "speech.create",
+                            "model": "tts-1",
+                            "voice": "alloy",
+                            "input": {
+                                "text": f"Rozumím, že říkáte: {text}. Moment prosím, zpracovávám odpověď.",
+                                "format": "g711_ulaw",
+                                "sample_rate": 8000,
+                                "channels": 1
+                            }
+                        }
+                        await self.openai_ws.send(json.dumps(response_message))
+                        logger.info("Odpověď odeslána k syntéze")
+                    except Exception as e:
+                        logger.error(f"Chyba při generování odpovědi: {e}")
+                        
                 elif message_type == 'error':
                     error_info = data.get('error', {})
                     logger.error(f"Chyba z OpenAI: {error_info}")
                     
-                else:
-                    logger.debug(f"Neznámý typ zprávy z OpenAI: {message_type}")
-                    
-        except websockets.exceptions.ConnectionClosed:
-            logger.info("Připojení k OpenAI bylo ukončeno")
-            self.is_connected = False
         except Exception as e:
             logger.error(f"Chyba při zpracování zpráv z OpenAI: {str(e)}")
-            self.is_connected = False
-    
+            
     async def send_audio_to_openai(self, audio_data: bytes):
         """Odešle audio data do OpenAI."""
         try:
@@ -158,8 +155,11 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní.""",
             
             # Vytvoření zprávy pro OpenAI
             audio_message = {
-                "type": "input_audio_buffer.append",
-                "audio": audio_base64
+                "type": "audio.append",
+                "audio": audio_base64,
+                "format": "g711_ulaw",
+                "sample_rate": 8000,
+                "channels": 1
             }
             
             await self.openai_ws.send(json.dumps(audio_message))
@@ -175,7 +175,7 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní.""",
                 return
                 
             commit_message = {
-                "type": "input_audio_buffer.commit"
+                "type": "audio.done"
             }
             
             await self.openai_ws.send(json.dumps(commit_message))
