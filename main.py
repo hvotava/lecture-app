@@ -132,17 +132,31 @@ def admin_call_user(user_id: int = Path(...)):
         session.close()
         return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
     lesson = session.query(Lesson).filter_by(language=user.language).order_by(Lesson.id.desc()).first()
-    session.close()
     if not lesson:
+        session.close()
         return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
+    
+    # Vytvoření nového pokusu
+    attempt = Attempt(
+        user_id=user.id,
+        lesson_id=lesson.id,
+        next_due=datetime.now()
+    )
+    session.add(attempt)
+    session.commit()
+    
     try:
         from app.services.twilio_service import TwilioService
         twilio = TwilioService()
         base_url = os.getenv("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app")
-        webhook_url = f"{base_url.rstrip('/')}/voice/?attempt_id={user.id}"
+        webhook_url = f"{base_url.rstrip('/')}/voice/?attempt_id={attempt.id}"  # ✅ Používám attempt.id
+        logger.info(f"Volám uživatele {user.phone} s webhook URL: {webhook_url}")
         twilio.call(user.phone, webhook_url)
     except Exception as e:
-        print(f"Chyba při volání Twilio: {e}")
+        logger.error(f"Chyba při volání Twilio: {e}")
+    finally:
+        session.close()
+    
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
 @admin_router.get("/lessons", response_class=HTMLResponse, name="admin_list_lessons")
