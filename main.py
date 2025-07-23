@@ -67,7 +67,6 @@ def admin_new_user_get(request: Request):
 @admin_router.post("/users/new", response_class=HTMLResponse)
 def admin_new_user_post(request: Request, name: str = Form(...), phone: str = Form(...), language: str = Form(...), detail: str = Form("")):
     errors = {"name": [], "phone": [], "language": [], "detail": []}
-    # Validace (základní)
     if not name:
         errors["name"].append("Jméno je povinné.")
     if not phone or not (phone.startswith("+420") or phone.startswith("0")) or len(phone.replace(" ", "")) < 9:
@@ -75,29 +74,37 @@ def admin_new_user_post(request: Request, name: str = Form(...), phone: str = Fo
     if language not in ["cs", "en"]:
         errors["language"].append("Neplatný jazyk.")
     if any(errors.values()):
-        # Zobrazit formulář s chybami
         return templates.TemplateResponse("users/form.html", {"request": request, "user": None, "form": {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": errors["name"], "phone.errors": errors["phone"], "language.errors": errors["language"], "detail.errors": errors["detail"]}})
-    # Uložení do DB
     user = User(name=name, phone=phone, language=language, detail=detail)
     session = SessionLocal()
     session.add(user)
-    session.commit()
+    try:
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        form = {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": [str(e)], "phone.errors": [], "language.errors": [], "detail.errors": []}
+        session.close()
+        return templates.TemplateResponse("users/form.html", {"request": request, "user": None, "form": form})
     session.close()
-    # Přesměrování na seznam uživatelů
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
 @admin_router.get("/users/{id}/edit", response_class=HTMLResponse, name="admin_edit_user_get")
 def admin_edit_user_get(request: Request, id: int = Path(...)):
-    user = User.query.get(id) if hasattr(User, 'query') else None
+    session = SessionLocal()
+    user = session.query(User).get(id)
     if not user:
+        session.close()
         return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
     form = {"name": user.name, "phone": user.phone, "language": user.language, "detail": user.detail, "name.errors": [], "phone.errors": [], "language.errors": [], "detail.errors": []}
+    session.close()
     return templates.TemplateResponse("users/form.html", {"request": request, "user": user, "form": form})
 
 @admin_router.post("/users/{id}/edit", response_class=HTMLResponse)
 def admin_edit_user_post(request: Request, id: int = Path(...), name: str = Form(...), phone: str = Form(...), language: str = Form(...), detail: str = Form("")):
-    user = User.query.get(id) if hasattr(User, 'query') else None
+    session = SessionLocal()
+    user = session.query(User).get(id)
     if not user:
+        session.close()
         return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
     errors = {"name": [], "phone": [], "language": [], "detail": []}
     if not name:
@@ -108,23 +115,35 @@ def admin_edit_user_post(request: Request, id: int = Path(...), name: str = Form
         errors["language"].append("Neplatný jazyk.")
     if any(errors.values()):
         form = {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": errors["name"], "phone.errors": errors["phone"], "language.errors": errors["language"], "detail.errors": errors["detail"]}
+        session.close()
         return templates.TemplateResponse("users/form.html", {"request": request, "user": user, "form": form})
     user.name = name
     user.phone = phone
     user.language = language
     user.detail = detail
-    session = SessionLocal()
-    session.commit()
+    try:
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        form = {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": [str(e)], "phone.errors": [], "language.errors": [], "detail.errors": []}
+        session.close()
+        return templates.TemplateResponse("users/form.html", {"request": request, "user": user, "form": form})
     session.close()
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
 @admin_router.post("/users/{user_id}/delete", name="admin_delete_user")
 def admin_delete_user(user_id: int = Path(...)):
-    user = User.query.get(user_id) if hasattr(User, 'query') else None
+    session = SessionLocal()
+    user = session.query(User).get(user_id)
     if user:
-        session = SessionLocal()
-        session.delete(user)
-        session.commit()
+        try:
+            session.delete(user)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+        finally:
+            session.close()
+    else:
         session.close()
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
@@ -190,22 +209,33 @@ def admin_new_lesson_post(request: Request, title: str = Form(...), language: st
     lesson = Lesson(title=title, language=language, script=script, questions=questions)
     session = SessionLocal()
     session.add(lesson)
-    session.commit()
+    try:
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": [str(e)], "language.errors": [], "script.errors": [], "questions.errors": []}
+        session.close()
+        return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
     session.close()
     return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
 
 @admin_router.get("/lessons/{id}/edit", response_class=HTMLResponse, name="admin_edit_lesson_get")
 def admin_edit_lesson_get(request: Request, id: int = Path(...)):
-    lesson = Lesson.query.get(id) if hasattr(Lesson, 'query') else None
+    session = SessionLocal()
+    lesson = session.query(Lesson).get(id)
     if not lesson:
+        session.close()
         return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
     form = {"title": lesson.title, "language": lesson.language, "script": lesson.script, "questions": lesson.questions, "title.errors": [], "language.errors": [], "script.errors": [], "questions.errors": []}
+    session.close()
     return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
 
 @admin_router.post("/lessons/{id}/edit", response_class=HTMLResponse)
 def admin_edit_lesson_post(request: Request, id: int = Path(...), title: str = Form(...), language: str = Form(...), script: str = Form(...), questions: str = Form("")):
-    lesson = Lesson.query.get(id) if hasattr(Lesson, 'query') else None
+    session = SessionLocal()
+    lesson = session.query(Lesson).get(id)
     if not lesson:
+        session.close()
         return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
     errors = {"title": [], "language": [], "script": [], "questions": []}
     if not title:
@@ -216,23 +246,35 @@ def admin_edit_lesson_post(request: Request, id: int = Path(...), title: str = F
         errors["script"].append("Skript je povinný.")
     if any(errors.values()):
         form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": errors["title"], "language.errors": errors["language"], "script.errors": errors["script"], "questions.errors": errors["questions"]}
+        session.close()
         return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
     lesson.title = title
     lesson.language = language
     lesson.script = script
     lesson.questions = questions
-    session = SessionLocal()
-    session.commit()
+    try:
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": [str(e)], "language.errors": [], "script.errors": [], "questions.errors": []}
+        session.close()
+        return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
     session.close()
     return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
 
 @admin_router.post("/lessons/{lesson_id}/delete", name="admin_delete_lesson")
 def admin_delete_lesson(lesson_id: int = Path(...)):
-    lesson = Lesson.query.get(lesson_id) if hasattr(Lesson, 'query') else None
+    session = SessionLocal()
+    lesson = session.query(Lesson).get(lesson_id)
     if lesson:
-        session = SessionLocal()
-        session.delete(lesson)
-        session.commit()
+        try:
+            session.delete(lesson)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+        finally:
+            session.close()
+    else:
         session.close()
     return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
 
@@ -650,9 +692,12 @@ Tvoje úkoly:
                 await asyncio.sleep(1.0)  # Kontrola každou sekundu
                 if last_audio_time and audio_buffer:
                     time_since_last = (datetime.now() - last_audio_time).total_seconds()
-                    if time_since_last > 2.0:  # 2 sekundy ticha
+                    logger.info(f"[Ticho-check] Čas od posledního audia: {time_since_last:.2f}s, buffer: {len(audio_buffer)} bytes")
+                    # Pokud je v bufferu aspoň 1 sekunda audia nebo 2s ticha
+                    if len(audio_buffer) > 8000 or time_since_last > 2.0:
                         buffer_copy = bytes(audio_buffer)
                         audio_buffer.clear()
+                        logger.info(f"[Ticho-check] Zpracovávám buffer ({len(buffer_copy)} bytes) po {time_since_last:.2f}s ticha")
                         await process_speech_and_respond(buffer_copy)
         
         # Spustíme background task
@@ -983,23 +1028,17 @@ async def save_conversation_results(conversation_state):
     """Uloží výsledky konverzace do databáze."""
     if not conversation_state["attempt_id"]:
         return
-        
+    
+    session = SessionLocal()
     try:
-        session = SessionLocal()
         attempt = session.query(Attempt).get(conversation_state["attempt_id"])
-        
         if attempt and conversation_state["user_answers"]:
-            # Výpočet celkového skóre
             total_score = sum(answer["score"] for answer in conversation_state["user_answers"])
             average_score = total_score / len(conversation_state["user_answers"])
-            
-            # Aktualizace pokusu
             attempt.score = average_score
             attempt.status = "completed"
             attempt.completed_at = datetime.now()
             attempt.calculate_next_due()
-            
-            # Uložení odpovědí
             for i, answer_data in enumerate(conversation_state["user_answers"]):
                 answer = Answer(
                     attempt_id=attempt.id,
@@ -1012,10 +1051,10 @@ async def save_conversation_results(conversation_state):
                     feedback=answer_data["feedback"]
                 )
                 session.add(answer)
-            
             session.commit()
             logger.info(f"Uloženy výsledky pro pokus {attempt.id}, průměrné skóre: {average_score:.1f}%")
-            
-        session.close()
     except Exception as e:
-        logger.error(f"Chyba při ukládání výsledků: {e}") 
+        session.rollback()
+        logger.error(f"Chyba při ukládání výsledků: {e}")
+    finally:
+        session.close() 
