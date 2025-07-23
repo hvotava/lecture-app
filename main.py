@@ -596,6 +596,24 @@ async def audio_stream(websocket: WebSocket):
         except Exception as e:
             logger.error(f"Chyba při odesílání audio: {e}")
     
+    def wav_to_mulaw(wav_bytes):
+        import wave
+        import audioop
+        import io
+        with io.BytesIO(wav_bytes) as wav_io:
+            with wave.open(wav_io, 'rb') as wav_file:
+                n_channels = wav_file.getnchannels()
+                sampwidth = wav_file.getsampwidth()
+                framerate = wav_file.getframerate()
+                pcm_data = wav_file.readframes(wav_file.getnframes())
+                logger.info(f"[TTS] WAV parametry: {n_channels}ch, {sampwidth*8}bit, {framerate}Hz, {len(pcm_data)} bytes")
+                if n_channels != 1 or sampwidth != 2 or framerate != 8000:
+                    logger.error("TTS WAV není mono/16bit/8kHz! Twilio přehraje pouze 8kHz mono μ-law.")
+                    # (volitelně: zde by šel přidat resampling, ale pro OpenAI TTS by mělo být správně)
+                    raise ValueError("TTS WAV není mono/16bit/8kHz!")
+                mulaw_data = audioop.lin2ulaw(pcm_data, 2)
+                return mulaw_data
+
     async def process_speech_and_respond(audio_bytes: bytes):
         """Zpracuje řeč a vygeneruje odpověď"""
         if not openai_service:
@@ -651,16 +669,26 @@ async def audio_stream(websocket: WebSocket):
             if not tts_response.content or len(tts_response.content) < 100:
                 logger.error("TTS vrátil prázdný nebo příliš krátký audio výstup!")
                 return
-            # Konverze TTS audio na správný formát pro Twilio
-            tts_audio = tts_response.content
+            # Konverze TTS WAV na μ-law
             try:
-                import audioop
-                mulaw_data = audioop.lin2ulaw(tts_audio, 2)
+                mulaw_data = wav_to_mulaw(tts_response.content)
             except Exception as e:
-                logger.error(f"Chyba při převodu na μ-law: {e}")
+                logger.error(f"Chyba při převodu TTS WAV na μ-law: {e}")
                 return
-            await send_audio_to_twilio(tts_audio)
-            logger.info("Audio odesláno do Twilia (po TTS)")
+            # Odeslání do Twilia
+            audio_base64 = base64.b64encode(mulaw_data).decode('utf-8')
+            media_message = {
+                "event": "media",
+                "streamSid": stream_sid,
+                "media": {
+                    "payload": audio_base64
+                }
+            }
+            try:
+                await websocket.send_text(json.dumps(media_message))
+                logger.info("Audio odesláno do Twilia (po TTS)")
+            except Exception as e:
+                logger.error(f"Chyba při odesílání audio: {e}")
         except Exception as e:
             logger.error(f"Chyba při zpracování řeči: {e}")
             import traceback
