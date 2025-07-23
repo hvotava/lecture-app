@@ -427,9 +427,10 @@ async def root_post(request: Request, attempt_id: str = Query(None)):
 <Response>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
-    <Connect>
+    <Start>
         <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both_tracks" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
-    </Connect>
+    </Start>
+    <Pause length="3600"/>
 </Response>"""
     logger.info(f"TwiML odpověď z ROOT: {response}")
     return Response(content=response, media_type="text/xml")
@@ -461,9 +462,10 @@ async def voice(request: Request, attempt_id: str = Query(None)):
 <Response>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
-    <Connect>
+    <Start>
         <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both_tracks" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
-    </Connect>
+    </Start>
+    <Pause length="3600"/>
 </Response>"""
     logger.info(f"TwiML odpověď: {response}")
     return Response(content=response, media_type="text/xml")
