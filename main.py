@@ -529,20 +529,14 @@ async def voice(request: Request, attempt_id: str = Query(None)):
     )
     
     # Konfigurace Media Streamu
-    connect = Connect()
-    stream = Stream(
+    start = response.start()
+    start.stream(
         url="wss://lecture-app-production.up.railway.app/audio",
-        track="both",  # Správný formát pro obousměrný stream
+        track="both_tracks",  # Správná hodnota podle Twilio dokumentace
         status_callback="https://lecture-app-production.up.railway.app/stream-callback",
         status_callback_method="POST",
-        media_format={
-            "encoding": "mulaw",  # μ-law encoding
-            "sample_rate": 8000,  # 8kHz sample rate
-            "channels": 1  # Mono audio
-        }
+        name="ai_assistant_stream"  # Přidáno pro lepší identifikaci streamu
     )
-    connect.append(stream)
-    response.append(connect)
     
     # Dlouhá pauza pro udržení hovoru
     response.pause(length=3600)
