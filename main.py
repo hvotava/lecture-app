@@ -428,7 +428,7 @@ async def root_post(request: Request, attempt_id: str = Query(None)):
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
     <Connect>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="inbound_track" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="inbound" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
     </Connect>
 </Response>"""
     logger.info(f"TwiML odpověď z ROOT: {response}")
@@ -462,7 +462,7 @@ async def voice(request: Request, attempt_id: str = Query(None)):
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
     <Connect>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="inbound_track" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="inbound" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
     </Connect>
 </Response>"""
     logger.info(f"TwiML odpověď: {response}")
@@ -535,12 +535,20 @@ async def audio_stream(websocket: WebSocket):
                 logger.info(f"Twilio event: {event}")
                 
                 if event == "start":
-                    logger.info("Media Stream zahájen!")
+                    logger.info("=== MEDIA STREAM START EVENT PŘIJAT! ===")
                     stream_sid = msg.get("streamSid")
                     logger.info(f"Stream SID: {stream_sid}")
+                    logger.info(f"Start event data: {msg}")
                     
                     # Pošleme úvodní zprávu
                     await send_audio_to_twilio("Zdravím! Slyšíte mě?")
+                    
+                    # Pošleme také test zprávu pro čtení lekce
+                    await send_audio_to_twilio("Nyní vám přečtu lekci...")
+                    
+                elif event == "connected":
+                    logger.info("=== WEBSOCKET CONNECTED EVENT ===")
+                    logger.info(f"Connected event data: {msg}")
                     
                 elif event == "media":
                     payload = msg["media"]["payload"]
