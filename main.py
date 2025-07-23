@@ -765,12 +765,13 @@ async def audio_stream(websocket: WebSocket):
                         track = msg["media"]["track"]
                         seq = msg.get("sequenceNumber", "?")
                         # Logování každého chunku
-                        log_audio_chunk(seq, track, len(audio_buffer))
+                        logger.info(f"[AUDIO-CHUNK] track={track}, seq={seq}, buffer před: {len(audio_buffer)} bytes")
                         # Zpracováváme pouze inbound (příchozí) audio
-                        if track == "inbound":
+                        if track in ("inbound", "both_tracks"):
                             audio_bytes = base64.b64decode(payload)
                             audio_buffer.extend(audio_bytes)
                             last_audio_time = datetime.now()
+                            logger.info(f"[AUDIO-CHUNK] buffer po přidání: {len(audio_buffer)} bytes")
                             # Zpracování po 0.5s audia (4000 bytes)
                             if len(audio_buffer) > 4000:
                                 buffer_copy = bytes(audio_buffer)
