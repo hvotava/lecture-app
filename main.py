@@ -677,14 +677,19 @@ async def audio_stream(websocket: WebSocket):
                             
                             # Odeslání 160B chunku do OpenAI
                             try:
-                                media_message = {
-                                    "type": "audio.append",  # Správný typ pro audio data
-                                    "audio": base64.b64encode(chunk).decode('utf-8'),
-                                    "format": "g711_ulaw",
-                                    "sample_rate": 8000,
-                                    "channels": 1
+                                # OpenAI formát
+                                openai_message = {
+                                    "type": "speech.create",
+                                    "model": "tts-1",
+                                    "voice": "alloy",
+                                    "input": {
+                                        "audio": base64.b64encode(chunk).decode('utf-8'),
+                                        "format": "g711_ulaw",
+                                        "sample_rate": 8000,
+                                        "channels": 1
+                                    }
                                 }
-                                await safe_send_text(json.dumps(media_message))
+                                await safe_send_text(json.dumps(openai_message))
                                 logger.info(f"[MEDIA] Inbound audio chunk odeslán do OpenAI Realtime (160 bytes)")
                             except Exception as e:
                                 logger.error(f"Chyba při odesílání do OpenAI Realtime: {e}")
@@ -699,28 +704,30 @@ async def audio_stream(websocket: WebSocket):
                                 chunk = audio_bytes[i:i+160]
                                 if len(chunk) == 160:  # Odesíláme pouze kompletní chunky
                                     try:
-                                        # Twilio očekává event: "media" s media.payload
-                                        media_message = {
+                                        # Twilio formát
+                                        twilio_message = {
                                             "event": "media",
+                                            "streamSid": stream_sid,
                                             "media": {
                                                 "payload": base64.b64encode(chunk).decode('utf-8')
                                             }
                                         }
-                                        await safe_send_text(json.dumps(media_message))
+                                        await safe_send_text(json.dumps(twilio_message))
                                         logger.info(f"[AUDIO-CHUNK] Outbound audio chunk přeposlán do Twilia (μ-law, 8kHz, mono, 160B)")
                                     except Exception as e:
                                         logger.error(f"Chyba při přeposílání rozděleného audio chunku: {e}")
                         else:
                             # Standardní odeslání pro správně veliké chunky
                             try:
-                                # Twilio očekává event: "media" s media.payload
-                                media_message = {
+                                # Twilio formát
+                                twilio_message = {
                                     "event": "media",
+                                    "streamSid": stream_sid,
                                     "media": {
                                         "payload": payload
                                     }
                                 }
-                                await safe_send_text(json.dumps(media_message))
+                                await safe_send_text(json.dumps(twilio_message))
                                 logger.info(f"[AUDIO-CHUNK] Outbound audio chunk přeposlán do Twilia (μ-law, 8kHz, mono, 160B)")
                             except Exception as e:
                                 logger.error(f"Chyba při přeposílání outbound audia: {e}")
