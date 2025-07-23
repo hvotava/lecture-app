@@ -685,10 +685,20 @@ async def audio_stream(websocket: WebSocket):
             logger.info(f"Transkripce: {user_text}")
             conversation_context.append({"role": "user", "content": user_text})
             # 2. Generování odpovědi pomocí GPT
-            system_prompt = f"""Jsi AI asistent pro výuku jazyků. {lesson_context}\n\nTvoje úkoly:\n- Pomáhej studentovi s lekcí\n- Odpovídej na otázky týkající se obsahu\n- Buď trpělivý a povzbuzující\n- Odpovídej stručně (max 1-2 věty)\n- Mluv česky"""
+            system_prompt = f"""Jsi AI asistent pro výuku jazyků. {lesson_context}
+
+Tvoje úkoly:
+- Pomáhej studentovi s lekcí
+- Odpovídej na otázky týkající se obsahu
+- Buď trpělivý a povzbuzující
+- Odpovídej VELMI stručně (max 1 věta)
+- Mluv česky
+- NIKDY se neomlouvej za to, že nemůžeš prohlížet web nebo dělat jiné věci
+- Prostě odpověz na otázku nebo řekni "Nerozumím otázce, můžete ji přeformulovat?"
+"""
             messages = [{"role": "system", "content": system_prompt}] + conversation_context[-10:]
             response = openai_service.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-3.5-turbo",
                 messages=messages,
                 max_tokens=50,
                 temperature=0.7
