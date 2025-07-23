@@ -534,9 +534,9 @@ async def voice_start_stream(request: Request):
 
 @app.websocket("/audio")
 async def audio_stream(websocket: WebSocket):
+    await websocket.accept()
     print("=== WEBSOCKET /AUDIO HANDLER ZAVOLÁN ===")
     logger.info("=== WEBSOCKET /AUDIO HANDLER ZAVOLÁN ===")
-    await websocket.accept()
     print("=== WEBSOCKET /AUDIO ACCEPTED ===")
     logger.info("=== AUDIO WEBSOCKET HANDLER SPUŠTĚN ===")
     logger.info(f"WebSocket client: {websocket.client}")
@@ -638,19 +638,27 @@ async def audio_stream(websocket: WebSocket):
         try:
             logger.info(f"Zpracovávám audio buffer ({len(audio_bytes)} bytes)")
             
-            # Pošleme mezitímní signál Twiliu (prázdný media chunk), aby vědělo, že jsme aktivní
+            # OKAMŽITÁ ODPOVĚĎ - pošleme "Moment..." aby Twilio vědělo, že fungujeme
             try:
-                keepalive_message = {
+                immediate_response = "Moment, přemýšlím..."
+                tts_immediate = openai_service.client.audio.speech.create(
+                    model="tts-1",
+                    voice="alloy", 
+                    input=immediate_response,
+                    response_format="wav"
+                )
+                mulaw_immediate = wav_to_mulaw(tts_immediate.content)
+                immediate_message = {
                     "event": "media",
                     "streamSid": stream_sid,
                     "media": {
-                        "payload": ""
+                        "payload": base64.b64encode(mulaw_immediate).decode('utf-8')
                     }
                 }
-                await safe_send_text(json.dumps(keepalive_message))
-                logger.info("Keepalive signál odeslán")
+                await safe_send_text(json.dumps(immediate_message))
+                logger.info("Okamžitá odpověď 'Moment...' odeslána")
             except Exception as e:
-                logger.warning(f"Chyba při keepalive: {e}")
+                logger.warning(f"Chyba při okamžité odpovědi: {e}")
             
             # 1. Speech-to-Text pomocí Whisper
             import io
@@ -809,6 +817,12 @@ async def audio_stream(websocket: WebSocket):
                         if audio_buffer:
                             buffer_copy = bytes(audio_buffer)
                             await process_speech_and_respond(buffer_copy)
+                        # Zavřeme WebSocket spojení
+                        try:
+                            await websocket.close()
+                            logger.info("WebSocket spojení uzavřeno po stream-stopped")
+                        except Exception as e:
+                            logger.warning(f"Chyba při zavírání WebSocket: {e}")
                         break
                         
                 except json.JSONDecodeError as e:
@@ -1013,3 +1027,15 @@ async def media_stream(websocket: WebSocket):
             logger.error(f"Chyba při ukládání výsledků: {e}")
         finally:
             session.close() 
+
+# Konfigurace pro produkci s delšími WebSocket timeouty
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000)),
+        ws_ping_interval=30,  # Ping každých 30 sekund
+        ws_ping_timeout=10,   # Timeout pro ping odpověď 10 sekund
+        timeout_keep_alive=65  # Keep-alive timeout 65 sekund
+    ) 
