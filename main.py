@@ -495,6 +495,10 @@ async def audio_stream(websocket: WebSocket):
     logger.info("=== WEBSOCKET /AUDIO ACCEPTED - ČEKÁM NA TWILIO DATA ===")
     
     try:
+        # Pošleme potvrzení připojení (volitelné)
+        await websocket.send_text('{"event":"connected","protocol":"websocket","version":"1.0.0"}')
+        logger.info("Odesláno potvrzení připojení")
+        
         while True:
             data = await websocket.receive_text()
             logger.info(f"=== PŘIJATO Z TWILIA (/audio): {data[:300]} ===")
@@ -525,10 +529,15 @@ async def audio_stream(websocket: WebSocket):
                 logger.error(f"Chyba při zpracování zprávy: {e}")
                 
     except WebSocketDisconnect:
-        logger.info("WebSocket /audio odpojen Twiliem")
+        logger.info("WebSocket /audio odpojen Twiliem (WebSocketDisconnect)")
     except Exception as e:
         logger.error(f"Chyba ve WebSocket /audio: {e}")
-        await websocket.close()
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 @app.websocket("/voice/media-stream")
 async def media_stream(websocket: WebSocket):
