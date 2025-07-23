@@ -428,7 +428,7 @@ async def root_post(request: Request, attempt_id: str = Query(None)):
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
     <Connect>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="inbound" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both_tracks" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
     </Connect>
 </Response>"""
     logger.info(f"TwiML odpověď z ROOT: {response}")
@@ -462,7 +462,7 @@ async def voice(request: Request, attempt_id: str = Query(None)):
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
     <Connect>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="inbound" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
+        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both_tracks" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
     </Connect>
 </Response>"""
     logger.info(f"TwiML odpověď: {response}")
