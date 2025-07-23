@@ -554,6 +554,9 @@ async def audio_stream(websocket: WebSocket):
                 "model": "gpt-4o-mini-tts",
                 "modalities": ["audio"],
                 "voice": "alloy",
+                "input_audio_transcription": {
+                    "model": "whisper-1"  # Použití Whisper-1 přímo v API
+                },
                 "turn_detection": {
                     "type": "server_vad",
                     "threshold": 0.5,
@@ -569,7 +572,7 @@ async def audio_stream(websocket: WebSocket):
 
     # Stav konverzace
     stream_sid = None
-    audio_buffer = bytearray()
+    inbound_buffer = bytearray()  # Buffer pro příchozí audio (od uživatele)
     last_audio_time = None
 
     async def safe_send_text(msg):
@@ -594,17 +597,16 @@ async def audio_stream(websocket: WebSocket):
                     payload = msg["media"]["payload"]
                     track = msg["media"]["track"]
                     seq = msg.get("sequenceNumber", "?")
-                    logger.info(f"[AUDIO-CHUNK] track={track}, seq={seq}, buffer před: {len(audio_buffer)} bytes")
 
-                    if track in ("inbound", "both_tracks"):
+                    if track == "inbound":  # Audio od uživatele
                         audio_bytes = base64.b64decode(payload)
-                        audio_buffer.extend(audio_bytes)
+                        inbound_buffer.extend(audio_bytes)
                         last_audio_time = datetime.now()
-                        logger.info(f"[AUDIO-CHUNK] buffer po přidání: {len(audio_buffer)} bytes")
+                        logger.info(f"[AUDIO-CHUNK] Inbound audio chunk #{seq}, buffer: {len(inbound_buffer)} bytes")
 
-                        if len(audio_buffer) > 2400:  # 0.3s audia
-                            buffer_copy = bytes(audio_buffer)
-                            audio_buffer.clear()
+                        if len(inbound_buffer) > 2400:  # 0.3s audia
+                            buffer_copy = bytes(inbound_buffer)
+                            inbound_buffer.clear()
                             
                             # Odeslání audia do OpenAI Realtime API
                             try:
@@ -613,21 +615,25 @@ async def audio_stream(websocket: WebSocket):
                                     "audio": base64.b64encode(buffer_copy).decode('utf-8')
                                 }
                                 await safe_send_text(json.dumps(media_message))
-                                logger.info(f"[MEDIA] Audio odesláno do OpenAI Realtime ({len(buffer_copy)} bytes)")
+                                logger.info(f"[MEDIA] Inbound audio odesláno do OpenAI Realtime ({len(buffer_copy)} bytes)")
                             except Exception as e:
                                 logger.error(f"Chyba při odesílání do OpenAI Realtime: {e}")
 
+                    elif track == "outbound":  # Audio od AI
+                        # Pouze logujeme pro případnou analýzu
+                        logger.info(f"[AUDIO-CHUNK] Outbound audio chunk #{seq}, velikost: {len(base64.b64decode(payload))} bytes")
+
                 elif event == "stop":
                     logger.info("Media Stream ukončen")
-                    if audio_buffer:
-                        buffer_copy = bytes(audio_buffer)
+                    if inbound_buffer:  # Odešleme poslední inbound audio
+                        buffer_copy = bytes(inbound_buffer)
                         try:
                             media_message = {
                                 "type": "input_audio_buffer.append",
                                 "audio": base64.b64encode(buffer_copy).decode('utf-8')
                             }
                             await safe_send_text(json.dumps(media_message))
-                            logger.info(f"[MEDIA] Poslední audio odesláno do OpenAI Realtime ({len(buffer_copy)} bytes)")
+                            logger.info(f"[MEDIA] Poslední inbound audio odesláno do OpenAI Realtime ({len(buffer_copy)} bytes)")
                         except Exception as e:
                             logger.error(f"Chyba při odesílání posledního audia: {e}")
                     try:
@@ -636,6 +642,10 @@ async def audio_stream(websocket: WebSocket):
                     except Exception as e:
                         logger.warning(f"Chyba při zavírání WebSocket: {e}")
                     break
+
+                elif event == "conversation.item.input_audio_transcription.delta":
+                    # Logujeme průběžný přepis od Whisper-1
+                    logger.info(f"[WHISPER] Transkripce: {msg.get('delta', '')}")
 
             except json.JSONDecodeError as e:
                 logger.error(f"Neplatný JSON z Twilia: {e}")
