@@ -102,9 +102,17 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní.""",
                     if audio_data:
                         # Dekódování base64 audio dat
                         audio_bytes = base64.b64decode(audio_data)
-                        # Odeslání audio dat zpět do Twilio
+                        # Odeslání audio dat zpět do Twilio ve správném formátu
                         if audio_callback:
-                            audio_callback(audio_bytes)
+                            # Twilio očekává event: "media" s media.payload
+                            twilio_message = {
+                                "event": "media",
+                                "media": {
+                                    "payload": audio_data  # Použijeme původní base64 data
+                                }
+                            }
+                            audio_callback(json.dumps(twilio_message).encode())
+                            logger.info("Audio chunk odeslán do Twilio")
                             
                 elif message_type == 'speech.done':
                     logger.info("OpenAI dokončilo generování řeči")
@@ -153,13 +161,17 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní.""",
             # Kódování audio dat do base64
             audio_base64 = base64.b64encode(audio_data).decode('utf-8')
             
-            # Vytvoření zprávy pro OpenAI
+            # Vytvoření zprávy pro OpenAI ve správném formátu
             audio_message = {
-                "type": "audio.append",
-                "audio": audio_base64,
-                "format": "g711_ulaw",
-                "sample_rate": 8000,
-                "channels": 1
+                "type": "speech.create",
+                "model": "tts-1",
+                "voice": "alloy",
+                "input": {
+                    "audio": audio_base64,
+                    "format": "g711_ulaw",
+                    "sample_rate": 8000,
+                    "channels": 1
+                }
             }
             
             await self.openai_ws.send(json.dumps(audio_message))
@@ -175,7 +187,7 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní.""",
                 return
                 
             commit_message = {
-                "type": "audio.done"
+                "type": "speech.done"
             }
             
             await self.openai_ws.send(json.dumps(commit_message))

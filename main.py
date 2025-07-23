@@ -699,11 +699,10 @@ async def audio_stream(websocket: WebSocket):
                                 chunk = audio_bytes[i:i+160]
                                 if len(chunk) == 160:  # Odesíláme pouze kompletní chunky
                                     try:
+                                        # Twilio očekává event: "media" s media.payload
                                         media_message = {
                                             "event": "media",
-                                            "streamSid": stream_sid,
                                             "media": {
-                                                "track": "outbound",  # Explicitně označíme jako outbound
                                                 "payload": base64.b64encode(chunk).decode('utf-8')
                                             }
                                         }
@@ -714,11 +713,10 @@ async def audio_stream(websocket: WebSocket):
                         else:
                             # Standardní odeslání pro správně veliké chunky
                             try:
+                                # Twilio očekává event: "media" s media.payload
                                 media_message = {
                                     "event": "media",
-                                    "streamSid": stream_sid,
                                     "media": {
-                                        "track": "outbound",  # Explicitně označíme jako outbound
                                         "payload": payload
                                     }
                                 }
