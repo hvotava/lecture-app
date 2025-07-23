@@ -689,16 +689,20 @@ Tvoje úkoly:
         # Periodické zpracování bufferu při tichu
         async def silence_processor():
             while True:
-                await asyncio.sleep(1.0)  # Kontrola každou sekundu
+                await asyncio.sleep(0.5)  # Kontrola každou půlsekundu
                 if last_audio_time and audio_buffer:
                     time_since_last = (datetime.now() - last_audio_time).total_seconds()
                     logger.info(f"[Ticho-check] Čas od posledního audia: {time_since_last:.2f}s, buffer: {len(audio_buffer)} bytes")
-                    # Pokud je v bufferu aspoň 1 sekunda audia nebo 2s ticha
-                    if len(audio_buffer) > 8000 or time_since_last > 2.0:
+                    # Pokud je v bufferu aspoň 0.5 sekundy audia nebo 0.5s ticha
+                    if len(audio_buffer) > 4000 or time_since_last > 0.5:
                         buffer_copy = bytes(audio_buffer)
                         audio_buffer.clear()
                         logger.info(f"[Ticho-check] Zpracovávám buffer ({len(buffer_copy)} bytes) po {time_since_last:.2f}s ticha")
                         await process_speech_and_respond(buffer_copy)
+
+        # Logování při každém přírůstku do bufferu
+        def log_audio_chunk(seq, track, buf_len):
+            logger.info(f"[AUDIO-CHUNK] Přidán chunk #{seq} ({track}), buffer: {buf_len} bytes")
         
         # Spustíme background task
         silence_task = asyncio.create_task(silence_processor())
@@ -739,24 +743,21 @@ Tvoje úkoly:
                     elif event == "media":
                         payload = msg["media"]["payload"]
                         track = msg["media"]["track"]
-                        
+                        seq = msg.get("sequenceNumber", "?")
+                        # Logování každého chunku
+                        log_audio_chunk(seq, track, len(audio_buffer))
                         # Zpracováváme pouze inbound (příchozí) audio
                         if track == "inbound":
-                            # Omezené logování
-                            if int(msg.get("sequenceNumber", "0")) % 100 == 0:
-                                logger.info(f"Audio chunk #{msg.get('sequenceNumber')} ({track})")
-                            
-                            # Dekódování a přidání do bufferu
                             audio_bytes = base64.b64decode(payload)
                             audio_buffer.extend(audio_bytes)
                             last_audio_time = datetime.now()
-                            
-                            # Zpracování po 5 sekundách kontinuálního audio
-                            if len(audio_buffer) > 8000 * 5:  # 5 sekund při 8kHz
+                            # Zpracování po 0.5s audia (4000 bytes)
+                            if len(audio_buffer) > 4000:
                                 buffer_copy = bytes(audio_buffer)
                                 audio_buffer.clear()
+                                logger.info(f"[MEDIA] Zpracovávám buffer ({len(buffer_copy)} bytes) po {seq} chunku")
                                 await process_speech_and_respond(buffer_copy)
-                        
+                    
                     elif event == "stop":
                         logger.info("Media Stream ukončen")
                         # Zpracování posledního bufferu
