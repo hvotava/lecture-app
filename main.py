@@ -22,6 +22,10 @@ import base64
 import json
 import io
 import openai
+# Audio zpracování
+import audioop
+import wave
+import asyncio
 
 load_dotenv()
 
@@ -496,82 +500,239 @@ async def audio_stream(websocket: WebSocket):
     await websocket.accept()
     logger.info("=== WEBSOCKET /AUDIO ACCEPTED - ČEKÁM NA TWILIO DATA ===")
     
-    stream_sid = None
+    # Inicializace AI služeb
+    try:
+        from app.services.openai_service import OpenAIService
+        openai_service = OpenAIService()
+        logger.info("OpenAI služba inicializována")
+    except Exception as e:
+        logger.error(f"Chyba při inicializaci OpenAI: {e}")
+        openai_service = None
     
-    async def send_audio_to_twilio(text: str):
-        """Pošle text jako audio zpět do Twilio (placeholder - později nahradíme TTS)"""
+    # Stav konverzace
+    stream_sid = None
+    audio_buffer = bytearray()
+    last_audio_time = None
+    conversation_context = []
+    attempt_id = websocket.query_params.get("attempt_id")
+    lesson_context = ""
+    
+    # Načtení lekce pro kontext
+    if attempt_id:
+        try:
+            session = SessionLocal()
+            attempt = session.query(Attempt).get(int(attempt_id))
+            if attempt and attempt.lesson:
+                lesson_context = f"Lekce: {attempt.lesson.title}\nObsah: {attempt.lesson.script}"
+                logger.info(f"Načten kontext lekce: {attempt.lesson.title}")
+            session.close()
+        except Exception as e:
+            logger.error(f"Chyba při načítání lekce: {e}")
+    
+    async def send_audio_to_twilio(audio_data: bytes):
+        """Pošle audio data zpět do Twilio"""
         if not stream_sid:
             logger.warning("Nelze poslat audio - stream_sid není nastaven")
             return
             
-        # Pro test - pošleme μ-law ticho (0xFF je ticho v μ-law)
-        # V produkci zde bude OpenAI TTS nebo jiný převod textu na řeč
-        silence_mulaw = base64.b64encode(b'\xFF' * 160).decode('utf-8')  # 160 bytes = 20ms ticha v μ-law
-        
-        media_message = {
-            "event": "media",
-            "streamSid": stream_sid,
-            "media": {
-                "payload": silence_mulaw
-            }
-        }
-        
         try:
+            # Konverze na μ-law a base64
+            import audioop
+            mulaw_data = audioop.lin2ulaw(audio_data, 2)  # 16-bit linear to μ-law
+            audio_base64 = base64.b64encode(mulaw_data).decode('utf-8')
+            
+            media_message = {
+                "event": "media",
+                "streamSid": stream_sid,
+                "media": {
+                    "payload": audio_base64
+                }
+            }
+            
             await websocket.send_text(json.dumps(media_message))
-            logger.info(f"Odesláno audio do Twilio: {text[:50]}...")
+            logger.info("Audio odesláno do Twilio")
         except Exception as e:
             logger.error(f"Chyba při odesílání audio: {e}")
     
+    async def process_speech_and_respond(audio_bytes: bytes):
+        """Zpracuje řeč a vygeneruje odpověď"""
+        if not openai_service:
+            logger.error("OpenAI služba není dostupná")
+            return
+            
+        try:
+            logger.info(f"Zpracovávám audio buffer ({len(audio_bytes)} bytes)")
+            
+            # 1. Speech-to-Text pomocí Whisper
+            import io
+            audio_file = io.BytesIO()
+            
+            # Konverze μ-law na WAV
+            import audioop
+            import wave
+            linear_data = audioop.ulaw2lin(audio_bytes, 1)  # μ-law to linear
+            
+            # Vytvoření WAV souboru v paměti
+            with wave.open(audio_file, 'wb') as wav_file:
+                wav_file.setnchannels(1)  # mono
+                wav_file.setsampwidth(2)  # 16-bit
+                wav_file.setframerate(8000)  # 8kHz
+                wav_file.writeframes(linear_data)
+            
+            audio_file.seek(0)
+            audio_file.name = "audio.wav"
+            
+            # Whisper API
+            transcript = openai_service.client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language="cs"
+            )
+            
+            user_text = transcript.text.strip()
+            if not user_text:
+                logger.info("Prázdná transkripce - ignoruji")
+                return
+                
+            logger.info(f"Transkripce: {user_text}")
+            conversation_context.append({"role": "user", "content": user_text})
+            
+            # 2. Generování odpovědi pomocí GPT
+            system_prompt = f"""Jsi AI asistent pro výuku jazyků. {lesson_context}
+            
+Tvoje úkoly:
+- Pomáhej studentovi s lekcí
+- Odpovídej na otázky týkající se obsahu
+- Buď trpělivý a povzbuzující
+- Odpovídej stručně (max 2-3 věty)
+- Mluv česky"""
+
+            messages = [{"role": "system", "content": system_prompt}] + conversation_context[-10:]  # Posledních 10 zpráv
+            
+            response = openai_service.client.chat.completions.create(
+                model="gpt-4",
+                messages=messages,
+                max_tokens=150,
+                temperature=0.7
+            )
+            
+            ai_response = response.choices[0].message.content
+            logger.info(f"GPT odpověď: {ai_response}")
+            conversation_context.append({"role": "assistant", "content": ai_response})
+            
+            # 3. Text-to-Speech
+            tts_response = openai_service.client.audio.speech.create(
+                model="tts-1",
+                voice="alloy",
+                input=ai_response,
+                response_format="wav"
+            )
+            
+            # Konverze TTS audio na správný formát pro Twilio
+            tts_audio = tts_response.content
+            
+            # Pošleme audio zpět do Twilio
+            await send_audio_to_twilio(tts_audio)
+            
+        except Exception as e:
+            logger.error(f"Chyba při zpracování řeči: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+    
     try:
-        # Pošleme potvrzení připojení (volitelné)
+        # Pošleme potvrzení připojení
         await websocket.send_text('{"event":"connected","protocol":"websocket","version":"1.0.0"}')
         logger.info("Odesláno potvrzení připojení")
         
-        while True:
-            data = await websocket.receive_text()
-            logger.info(f"=== PŘIJATO Z TWILIA (/audio): {data[:300]} ===")
-            
+        # Periodické zpracování bufferu při tichu
+        async def silence_processor():
+            while True:
+                await asyncio.sleep(1.0)  # Kontrola každou sekundu
+                if last_audio_time and audio_buffer:
+                    time_since_last = (datetime.now() - last_audio_time).total_seconds()
+                    if time_since_last > 2.0:  # 2 sekundy ticha
+                        buffer_copy = bytes(audio_buffer)
+                        audio_buffer.clear()
+                        await process_speech_and_respond(buffer_copy)
+        
+        # Spustíme background task
+        silence_task = asyncio.create_task(silence_processor())
+        
+        try:
+            while True:
+                data = await websocket.receive_text()
+                
+                try:
+                    msg = json.loads(data)
+                    event = msg.get("event")
+                    
+                    if event == "start":
+                        logger.info("=== MEDIA STREAM START EVENT PŘIJAT! ===")
+                        stream_sid = msg.get("streamSid")
+                        logger.info(f"Stream SID: {stream_sid}")
+                        
+                        # Úvodní zpráva
+                        welcome_text = f"Vítejte u AI asistenta pro výuku jazyků!"
+                        if lesson_context:
+                            welcome_text += f" Dnes se budeme učit o tématu z vaší lekce. Můžete se mě ptát na cokoliv!"
+                        
+                        try:
+                            tts_response = openai_service.client.audio.speech.create(
+                                model="tts-1",
+                                voice="alloy",
+                                input=welcome_text,
+                                response_format="wav"
+                            )
+                            await send_audio_to_twilio(tts_response.content)
+                            logger.info("Úvodní zpráva odeslána")
+                        except Exception as e:
+                            logger.error(f"Chyba při generování úvodní zprávy: {e}")
+                        
+                    elif event == "connected":
+                        logger.info("=== WEBSOCKET CONNECTED EVENT ===")
+                        
+                    elif event == "media":
+                        payload = msg["media"]["payload"]
+                        track = msg["media"]["track"]
+                        
+                        # Zpracováváme pouze inbound (příchozí) audio
+                        if track == "inbound":
+                            # Omezené logování
+                            if int(msg.get("sequenceNumber", "0")) % 100 == 0:
+                                logger.info(f"Audio chunk #{msg.get('sequenceNumber')} ({track})")
+                            
+                            # Dekódování a přidání do bufferu
+                            audio_bytes = base64.b64decode(payload)
+                            audio_buffer.extend(audio_bytes)
+                            last_audio_time = datetime.now()
+                            
+                            # Zpracování po 5 sekundách kontinuálního audio
+                            if len(audio_buffer) > 8000 * 5:  # 5 sekund při 8kHz
+                                buffer_copy = bytes(audio_buffer)
+                                audio_buffer.clear()
+                                await process_speech_and_respond(buffer_copy)
+                        
+                    elif event == "stop":
+                        logger.info("Media Stream ukončen")
+                        # Zpracování posledního bufferu
+                        if audio_buffer:
+                            buffer_copy = bytes(audio_buffer)
+                            await process_speech_and_respond(buffer_copy)
+                        break
+                        
+                except json.JSONDecodeError as e:
+                    logger.error(f"Neplatný JSON z Twilia: {e}")
+                except Exception as e:
+                    logger.error(f"Chyba při zpracování zprávy: {e}")
+                    
+        finally:
+            # Zrušíme background task
+            silence_task.cancel()
             try:
-                msg = json.loads(data)
-                event = msg.get("event")
-                logger.info(f"Twilio event: {event}")
-                
-                if event == "start":
-                    logger.info("=== MEDIA STREAM START EVENT PŘIJAT! ===")
-                    stream_sid = msg.get("streamSid")
-                    logger.info(f"Stream SID: {stream_sid}")
-                    logger.info(f"Start event data: {msg}")
-                    
-                    # Pošleme úvodní zprávu
-                    await send_audio_to_twilio("Zdravím! Slyšíte mě?")
-                    
-                    # Pošleme také test zprávu pro čtení lekce
-                    await send_audio_to_twilio("Nyní vám přečtu lekci...")
-                    
-                elif event == "connected":
-                    logger.info("=== WEBSOCKET CONNECTED EVENT ===")
-                    logger.info(f"Connected event data: {msg}")
-                    
-                elif event == "media":
-                    payload = msg["media"]["payload"]
-                    # Omezíme logování - příliš mnoho dat
-                    if int(msg.get("sequenceNumber", "0")) % 50 == 0:  # Log každých 50 zpráv
-                        logger.info(f"Audio data chunk #{msg.get('sequenceNumber')}, length: {len(payload)}")
-                    
-                    audio_bytes = base64.b64decode(payload)
-                    # TODO: Zpracování audia přes OpenAI Whisper
-                    # TODO: Generování odpovědi přes OpenAI GPT
-                    # TODO: Převod odpovědi na řeč přes OpenAI TTS
-                    
-                elif event == "stop":
-                    logger.info("Media Stream ukončen")
-                    break
-                    
-            except json.JSONDecodeError as e:
-                logger.error(f"Neplatný JSON z Twilia: {e}")
-            except Exception as e:
-                logger.error(f"Chyba při zpracování zprávy: {e}")
-                
+                await silence_task
+            except asyncio.CancelledError:
+                pass
+        
     except WebSocketDisconnect:
         logger.info("WebSocket /audio odpojen Twiliem (WebSocketDisconnect)")
     except Exception as e:

@@ -9,3 +9,9 @@ psycopg2-binary
 # ... další závislosti dle původního requirements.txt
 jinja2
 python-multipart
+# Audio zpracování
+pydub
+numpy
+scipy
+# Pro μ-law konverzi
+audioop
