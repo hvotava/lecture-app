@@ -26,6 +26,7 @@ import openai
 import audioop
 import wave
 import asyncio
+import time
 
 load_dotenv()
 
@@ -622,13 +623,17 @@ async def audio_stream(websocket: WebSocket):
                                 logger.error(f"Chyba při odesílání do OpenAI Realtime: {e}")
 
                     elif track == "outbound":  # Audio od AI
-                        # Přepošleme audio zpět do Twilia
+                        # Přepošleme audio zpět do Twilia ve správném formátu
                         try:
                             media_message = {
                                 "event": "media",
                                 "streamSid": stream_sid,
+                                "sequenceNumber": seq,  # Zachováme původní sequence number
                                 "media": {
-                                    "payload": payload  # Použijeme původní base64 payload
+                                    "track": "outbound",  # Explicitně označíme jako outbound
+                                    "chunk": "audio",  # Typ chunku
+                                    "payload": payload,  # Použijeme původní base64 payload
+                                    "timestamp": int(time.time() * 1000)  # Aktuální timestamp v ms
                                 }
                             }
                             await safe_send_text(json.dumps(media_message))
