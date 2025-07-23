@@ -494,6 +494,32 @@ async def audio_stream(websocket: WebSocket):
     await websocket.accept()
     logger.info("=== WEBSOCKET /AUDIO ACCEPTED - ČEKÁM NA TWILIO DATA ===")
     
+    stream_sid = None
+    
+    async def send_audio_to_twilio(text: str):
+        """Pošle text jako audio zpět do Twilio (placeholder - později nahradíme TTS)"""
+        if not stream_sid:
+            logger.warning("Nelze poslat audio - stream_sid není nastaven")
+            return
+            
+        # Pro test - pošleme μ-law ticho (0xFF je ticho v μ-law)
+        # V produkci zde bude OpenAI TTS nebo jiný převod textu na řeč
+        silence_mulaw = base64.b64encode(b'\xFF' * 160).decode('utf-8')  # 160 bytes = 20ms ticha v μ-law
+        
+        media_message = {
+            "event": "media",
+            "streamSid": stream_sid,
+            "media": {
+                "payload": silence_mulaw
+            }
+        }
+        
+        try:
+            await websocket.send_text(json.dumps(media_message))
+            logger.info(f"Odesláno audio do Twilio: {text[:50]}...")
+        except Exception as e:
+            logger.error(f"Chyba při odesílání audio: {e}")
+    
     try:
         # Pošleme potvrzení připojení (volitelné)
         await websocket.send_text('{"event":"connected","protocol":"websocket","version":"1.0.0"}')
@@ -513,11 +539,19 @@ async def audio_stream(websocket: WebSocket):
                     stream_sid = msg.get("streamSid")
                     logger.info(f"Stream SID: {stream_sid}")
                     
+                    # Pošleme úvodní zprávu
+                    await send_audio_to_twilio("Zdravím! Slyšíte mě?")
+                    
                 elif event == "media":
                     payload = msg["media"]["payload"]
-                    logger.info(f"Audio data received, length: {len(payload)}")
+                    # Omezíme logování - příliš mnoho dat
+                    if int(msg.get("sequenceNumber", "0")) % 50 == 0:  # Log každých 50 zpráv
+                        logger.info(f"Audio data chunk #{msg.get('sequenceNumber')}, length: {len(payload)}")
+                    
                     audio_bytes = base64.b64decode(payload)
                     # TODO: Zpracování audia přes OpenAI Whisper
+                    # TODO: Generování odpovědi přes OpenAI GPT
+                    # TODO: Převod odpovědi na řeč přes OpenAI TTS
                     
                 elif event == "stop":
                     logger.info("Media Stream ukončen")
