@@ -568,8 +568,15 @@ async def audio_stream(websocket: WebSocket):
             }
         }))
         logger.info("Session konfigurace odeslána")
+
+        # Odeslání úvodního pozdravu
+        await websocket.send_text(json.dumps({
+            "type": "response.create",
+            "text": "Ahoj! Jsem váš AI asistent pro výuku jazyků. Jak vám mohu pomoci?"
+        }))
+        logger.info("Úvodní pozdrav odeslán")
     except Exception as e:
-        logger.error(f"Chyba při konfiguraci session: {e}")
+        logger.error(f"Chyba při konfiguraci session nebo odesílání pozdravu: {e}")
         return
 
     # Stav konverzace
@@ -623,23 +630,52 @@ async def audio_stream(websocket: WebSocket):
                                 logger.error(f"Chyba při odesílání do OpenAI Realtime: {e}")
 
                     elif track == "outbound":  # Audio od AI
-                        # Přepošleme audio zpět do Twilia ve správném formátu
-                        try:
-                            media_message = {
-                                "event": "media",
-                                "streamSid": stream_sid,
-                                "sequenceNumber": seq,  # Zachováme původní sequence number
-                                "media": {
-                                    "track": "outbound",  # Explicitně označíme jako outbound
-                                    "chunk": "audio",  # Typ chunku
-                                    "payload": payload,  # Použijeme původní base64 payload
-                                    "timestamp": int(time.time() * 1000)  # Aktuální timestamp v ms
+                        # Kontrola velikosti chunků
+                        audio_bytes = base64.b64decode(payload)
+                        if len(audio_bytes) != 160:  # 20ms @ 8kHz μ-law = 160 bytes
+                            logger.warning(f"Nesprávná velikost audio chunku: {len(audio_bytes)} bytes (očekáváno 160)")
+                            # Rozdělíme chunk na menší části po 160 bytech
+                            for i in range(0, len(audio_bytes), 160):
+                                chunk = audio_bytes[i:i+160]
+                                if len(chunk) == 160:  # Odesíláme pouze kompletní chunky
+                                    try:
+                                        media_message = {
+                                            "event": "media",
+                                            "streamSid": stream_sid,
+                                            "media": {
+                                                "track": "outbound",
+                                                "chunk": "audio",
+                                                "payload": base64.b64encode(chunk).decode('utf-8'),
+                                                "timestamp": int(time.time() * 1000),
+                                                "contentType": "audio/mulaw",
+                                                "sampleRate": 8000,
+                                                "channels": 1
+                                            }
+                                        }
+                                        await safe_send_text(json.dumps(media_message))
+                                        logger.info(f"[AUDIO-CHUNK] Outbound audio chunk přeposlán do Twilia (μ-law, 8kHz, mono, 160B)")
+                                    except Exception as e:
+                                        logger.error(f"Chyba při přeposílání rozděleného audio chunku: {e}")
+                        else:
+                            # Standardní odeslání pro správně veliké chunky
+                            try:
+                                media_message = {
+                                    "event": "media",
+                                    "streamSid": stream_sid,
+                                    "media": {
+                                        "track": "outbound",
+                                        "chunk": "audio",
+                                        "payload": payload,
+                                        "timestamp": int(time.time() * 1000),
+                                        "contentType": "audio/mulaw",
+                                        "sampleRate": 8000,
+                                        "channels": 1
+                                    }
                                 }
-                            }
-                            await safe_send_text(json.dumps(media_message))
-                            logger.info(f"[AUDIO-CHUNK] Outbound audio chunk #{seq} přeposlán do Twilia")
-                        except Exception as e:
-                            logger.error(f"Chyba při přeposílání outbound audia: {e}")
+                                await safe_send_text(json.dumps(media_message))
+                                logger.info(f"[AUDIO-CHUNK] Outbound audio chunk přeposlán do Twilia (μ-law, 8kHz, mono, 160B)")
+                            except Exception as e:
+                                logger.error(f"Chyba při přeposílání outbound audia: {e}")
 
                 elif event == "input_audio_buffer.speech_stopped":
                     # Když uživatel přestane mluvit, vytvoříme response
