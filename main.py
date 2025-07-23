@@ -621,6 +621,12 @@ async def audio_stream(websocket: WebSocket):
                 mulaw_data = audioop.lin2ulaw(pcm_data, 2)
                 return mulaw_data
 
+    async def safe_send_text(msg):
+        try:
+            await websocket.send_text(msg)
+        except Exception as e:
+            logger.error(f"[safe_send_text] WebSocket není připojen: {e}")
+
     async def process_speech_and_respond(audio_bytes: bytes):
         """Zpracuje řeč a vygeneruje odpověď"""
         if not openai_service:
@@ -847,242 +853,145 @@ async def media_stream(websocket: WebSocket):
         except Exception as e:
             logger.error(f"[safe_send_text] WebSocket není připojen: {e}")
 
-    try:
-        # Načtení parametrů z URL
-        query_params = websocket.query_params
-        attempt_id = query_params.get("attempt_id")
-        logger.info(f"WebSocket query params: {query_params}")
-        
-        if attempt_id:
-            logger.info(f"Načítám attempt_id: {attempt_id}")
-            # Načtení pokusu z databáze
-            session = SessionLocal()
-            attempt = session.query(Attempt).get(int(attempt_id))
-            if attempt:
-                conversation_state["attempt_id"] = attempt.id
-                conversation_state["user_id"] = attempt.user_id
-                conversation_state["lesson_id"] = attempt.lesson_id
-                conversation_state["lesson"] = attempt.lesson
+    async def process_audio_and_respond(websocket, conversation_state, openai_service, twilio_service):
+        """Zpracuje audio buffer a odpoví podle fáze konverzace."""
+        try:
+            # Převod audia na text
+            audio_text = openai_service.speech_to_text(
+                conversation_state["audio_buffer"], 
+                language=conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
+            )
+            
+            if not audio_text.strip():
+                logger.info("Prázdný audio - ignoruji")
+                conversation_state["audio_buffer"] = b""
+                return
+            
+            logger.info(f"Přepsaný text: {audio_text}")
+            
+            # Zpracování podle fáze konverzace
+            if conversation_state["phase"] == "introduction":
+                # Přechod do fáze výuky
+                conversation_state["phase"] = "teaching"
+                await send_twiml_response(websocket, twilio_service.create_teaching_response(
+                    conversation_state["lesson"]
+                ))
                 
-                # Generování otázek z lekce
-                if attempt.lesson:
-                    questions = openai_service.generate_questions_from_lesson(
-                        attempt.lesson.script, 
-                        attempt.lesson.language, 
-                        num_questions=5
+            elif conversation_state["phase"] == "teaching":
+                # Kontrola, zda uživatel chce přejít k otázkám
+                if any(keyword in audio_text.lower() for keyword in ["otázky", "zkoušení", "test", "hotovo", "konec"]):
+                    conversation_state["phase"] = "questioning"
+                    await send_twiml_response(websocket, twilio_service.create_questioning_start_response())
+                else:
+                    # Odpověď na otázku o lekci
+                    response = openai_service.answer_user_question(
+                        audio_text,
+                        current_lesson=conversation_state["lesson"].__dict__ if conversation_state["lesson"] else None,
+                        language=conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
                     )
-                    conversation_state["questions"] = questions
-                    logger.info(f"Vygenerováno {len(questions)} otázek pro lekci")
+                    await send_twiml_response(websocket, twilio_service.create_chat_response(
+                        response["answer"],
+                        conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
+                    ))
+                    
+            elif conversation_state["phase"] == "questioning":
+                # Zpracování odpovědi na otázku
+                if conversation_state["current_question_index"] < len(conversation_state["questions"]):
+                    current_question = conversation_state["questions"][conversation_state["current_question_index"]]
+                    
+                    # Vyhodnocení odpovědi
+                    evaluation = openai_service.evaluate_voice_answer(
+                        current_question["question"],
+                        current_question["correct_answer"],
+                        audio_text,
+                        conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
+                    )
+                    
+                    # Uložení odpovědi
+                    conversation_state["user_answers"].append({
+                        "question": current_question["question"],
+                        "correct_answer": current_question["correct_answer"],
+                        "user_answer": audio_text,
+                        "score": evaluation["score"],
+                        "feedback": evaluation["feedback"],
+                        "is_correct": evaluation["is_correct"]
+                    })
+                    
+                    # Odpověď s feedbackem
+                    feedback_text = f"Vaše odpověď: {evaluation['feedback']}. Skóre: {evaluation['score']}%."
+                    await send_twiml_response(websocket, twilio_service.create_feedback_response(
+                        feedback_text,
+                        conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
+                    ))
+                    
+                    conversation_state["current_question_index"] += 1
+                    
+                    # Další otázka nebo konec
+                    if conversation_state["current_question_index"] < len(conversation_state["questions"]):
+                        next_question = conversation_state["questions"][conversation_state["current_question_index"]]
+                        await send_twiml_response(websocket, twilio_service.create_question_response(
+                            next_question["question"],
+                            conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
+                        ))
+                    else:
+                        # Konec zkoušení
+                        conversation_state["phase"] = "evaluation"
+                        await send_twiml_response(websocket, twilio_service.create_evaluation_response(
+                            conversation_state["user_answers"],
+                            conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
+                        ))
             
-            session.close()
-        
-        # Úvodní hláška
-        logger.info("Odesílám úvodní TwiML odpověď Twiliu")
-        await send_twiml_response(websocket, twilio_service.create_introduction_response(
-            conversation_state["lesson"] if conversation_state["lesson"] else None
-        ))
-        
-        while True:
-            logger.info("Čekám na zprávu z Twilia...")
-            # Přijetí dat z Twilio
-            data = await websocket.receive_text()
-            logger.info(f"Přijato z Twilia: {data}")
-            
-            # Parsování JSON z Twilio Media Streams
-            try:
-                import json
-                media_data = json.loads(data)
-                
-                if "event" in media_data:
-                    event = media_data["event"]
-                    
-                    if event == "media":
-                        # Audio data
-                        audio_data = media_data.get("media", {}).get("payload", "")
-                        if audio_data:
-                            # Přidání do bufferu
-                            import base64
-                            try:
-                                audio_bytes = base64.b64decode(audio_data)
-                                conversation_state["audio_buffer"] += audio_bytes
-                                conversation_state["last_audio_time"] = datetime.now()
-                            except Exception as e:
-                                logger.error(f"Chyba při dekódování audia: {e}")
-                    
-                    elif event == "stop":
-                        # Konec audia - zpracování
-                        if conversation_state["audio_buffer"]:
-                            await process_audio_and_respond(
-                                websocket, 
-                                conversation_state, 
-                                openai_service, 
-                                twilio_service
-                            )
-                    
-                    elif event == "mark":
-                        # Mark event - možnost pro synchronizaci
-                        mark_name = media_data.get("mark", {}).get("name", "")
-                        logger.info(f"Mark event: {mark_name}")
-                        
-                        if mark_name == "question_start":
-                            conversation_state["phase"] = "questioning"
-                        elif mark_name == "teaching_start":
-                            conversation_state["phase"] = "teaching"
-                            
-            except json.JSONDecodeError:
-                logger.warning("Neplatný JSON z Twilio")
-            except Exception as e:
-                logger.error(f"Chyba při zpracování dat: {e}")
-                
-    except WebSocketDisconnect:
-        logger.info("WebSocket odpojen Twiliem (WebSocketDisconnect)")
-        # Uložení výsledků
-        await save_conversation_results(conversation_state)
-    except Exception as e:
-        logger.error(f"Chyba ve WebSocket handleru: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        await websocket.close()
-
-async def process_audio_and_respond(websocket, conversation_state, openai_service, twilio_service):
-    """Zpracuje audio buffer a odpoví podle fáze konverzace."""
-    try:
-        # Převod audia na text
-        audio_text = openai_service.speech_to_text(
-            conversation_state["audio_buffer"], 
-            language=conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
-        )
-        
-        if not audio_text.strip():
-            logger.info("Prázdný audio - ignoruji")
+            # Vyčištění bufferu
             conversation_state["audio_buffer"] = b""
+            
+        except Exception as e:
+            logger.error(f"Chyba při zpracování audia: {e}")
+            conversation_state["audio_buffer"] = b""
+
+    async def send_twiml_response(websocket, twiml_content):
+        """Pošle TwiML odpověď zpět do Twilio."""
+        try:
+            await websocket.send_text(json.dumps({
+                "event": "media",
+                "streamSid": "placeholder",
+                "media": {
+                    "payload": twiml_content
+                }
+            }))
+        except Exception as e:
+            logger.error(f"Chyba při odesílání TwiML: {e}")
+
+    async def save_conversation_results(conversation_state):
+        """Uloží výsledky konverzace do databáze."""
+        if not conversation_state["attempt_id"]:
             return
         
-        logger.info(f"Přepsaný text: {audio_text}")
-        
-        # Zpracování podle fáze konverzace
-        if conversation_state["phase"] == "introduction":
-            # Přechod do fáze výuky
-            conversation_state["phase"] = "teaching"
-            await send_twiml_response(websocket, twilio_service.create_teaching_response(
-                conversation_state["lesson"]
-            ))
-            
-        elif conversation_state["phase"] == "teaching":
-            # Kontrola, zda uživatel chce přejít k otázkám
-            if any(keyword in audio_text.lower() for keyword in ["otázky", "zkoušení", "test", "hotovo", "konec"]):
-                conversation_state["phase"] = "questioning"
-                await send_twiml_response(websocket, twilio_service.create_questioning_start_response())
-            else:
-                # Odpověď na otázku o lekci
-                response = openai_service.answer_user_question(
-                    audio_text,
-                    current_lesson=conversation_state["lesson"].__dict__ if conversation_state["lesson"] else None,
-                    language=conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
-                )
-                await send_twiml_response(websocket, twilio_service.create_chat_response(
-                    response["answer"],
-                    conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
-                ))
-                
-        elif conversation_state["phase"] == "questioning":
-            # Zpracování odpovědi na otázku
-            if conversation_state["current_question_index"] < len(conversation_state["questions"]):
-                current_question = conversation_state["questions"][conversation_state["current_question_index"]]
-                
-                # Vyhodnocení odpovědi
-                evaluation = openai_service.evaluate_voice_answer(
-                    current_question["question"],
-                    current_question["correct_answer"],
-                    audio_text,
-                    conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
-                )
-                
-                # Uložení odpovědi
-                conversation_state["user_answers"].append({
-                    "question": current_question["question"],
-                    "correct_answer": current_question["correct_answer"],
-                    "user_answer": audio_text,
-                    "score": evaluation["score"],
-                    "feedback": evaluation["feedback"],
-                    "is_correct": evaluation["is_correct"]
-                })
-                
-                # Odpověď s feedbackem
-                feedback_text = f"Vaše odpověď: {evaluation['feedback']}. Skóre: {evaluation['score']}%."
-                await send_twiml_response(websocket, twilio_service.create_feedback_response(
-                    feedback_text,
-                    conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
-                ))
-                
-                conversation_state["current_question_index"] += 1
-                
-                # Další otázka nebo konec
-                if conversation_state["current_question_index"] < len(conversation_state["questions"]):
-                    next_question = conversation_state["questions"][conversation_state["current_question_index"]]
-                    await send_twiml_response(websocket, twilio_service.create_question_response(
-                        next_question["question"],
-                        conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
-                    ))
-                else:
-                    # Konec zkoušení
-                    conversation_state["phase"] = "evaluation"
-                    await send_twiml_response(websocket, twilio_service.create_evaluation_response(
-                        conversation_state["user_answers"],
-                        conversation_state["lesson"].language if conversation_state["lesson"] else "cs"
-                    ))
-        
-        # Vyčištění bufferu
-        conversation_state["audio_buffer"] = b""
-        
-    except Exception as e:
-        logger.error(f"Chyba při zpracování audia: {e}")
-        conversation_state["audio_buffer"] = b""
-
-async def send_twiml_response(websocket, twiml_content):
-    """Pošle TwiML odpověď zpět do Twilio."""
-    try:
-        await websocket.send_text(json.dumps({
-            "event": "media",
-            "streamSid": "placeholder",
-            "media": {
-                "payload": twiml_content
-            }
-        }))
-    except Exception as e:
-        logger.error(f"Chyba při odesílání TwiML: {e}")
-
-async def save_conversation_results(conversation_state):
-    """Uloží výsledky konverzace do databáze."""
-    if not conversation_state["attempt_id"]:
-        return
-    
-    session = SessionLocal()
-    try:
-        attempt = session.query(Attempt).get(conversation_state["attempt_id"])
-        if attempt and conversation_state["user_answers"]:
-            total_score = sum(answer["score"] for answer in conversation_state["user_answers"])
-            average_score = total_score / len(conversation_state["user_answers"])
-            attempt.score = average_score
-            attempt.status = "completed"
-            attempt.completed_at = datetime.now()
-            attempt.calculate_next_due()
-            for i, answer_data in enumerate(conversation_state["user_answers"]):
-                answer = Answer(
-                    attempt_id=attempt.id,
-                    question_index=i,
-                    question_text=answer_data["question"],
-                    correct_answer=answer_data["correct_answer"],
-                    user_answer=answer_data["user_answer"],
-                    score=answer_data["score"],
-                    is_correct=answer_data["is_correct"],
-                    feedback=answer_data["feedback"]
-                )
-                session.add(answer)
-            session.commit()
-            logger.info(f"Uloženy výsledky pro pokus {attempt.id}, průměrné skóre: {average_score:.1f}%")
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Chyba při ukládání výsledků: {e}")
-    finally:
-        session.close() 
+        session = SessionLocal()
+        try:
+            attempt = session.query(Attempt).get(conversation_state["attempt_id"])
+            if attempt and conversation_state["user_answers"]:
+                total_score = sum(answer["score"] for answer in conversation_state["user_answers"])
+                average_score = total_score / len(conversation_state["user_answers"])
+                attempt.score = average_score
+                attempt.status = "completed"
+                attempt.completed_at = datetime.now()
+                attempt.calculate_next_due()
+                for i, answer_data in enumerate(conversation_state["user_answers"]):
+                    answer = Answer(
+                        attempt_id=attempt.id,
+                        question_index=i,
+                        question_text=answer_data["question"],
+                        correct_answer=answer_data["correct_answer"],
+                        user_answer=answer_data["user_answer"],
+                        score=answer_data["score"],
+                        is_correct=answer_data["is_correct"],
+                        feedback=answer_data["feedback"]
+                    )
+                    session.add(answer)
+                session.commit()
+                logger.info(f"Uloženy výsledky pro pokus {attempt.id}, průměrné skóre: {average_score:.1f}%")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Chyba při ukládání výsledků: {e}")
+        finally:
+            session.close() 
