@@ -12,6 +12,4 @@ python-multipart
 # Audio zpracování
 pydub
 numpy
-scipy
-# Pro μ-law konverzi
-audioop
+scipy>=1.11.0
