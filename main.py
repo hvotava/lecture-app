@@ -579,9 +579,10 @@ async def audio_stream(websocket: WebSocket):
         await websocket.send_text(json.dumps({
             "type": "session.update",
             "session": {
-                "model": "gpt-4o-mini-tts",
-                "modalities": ["audio"],
+                "model": "tts-1",  # Správný model pro TTS
                 "voice": "alloy",
+                "input_audio_format": "g711_ulaw",
+                "output_audio_format": "g711_ulaw",
                 "input_audio_transcription": {
                     "model": "whisper-1"
                 },
@@ -590,7 +591,7 @@ async def audio_stream(websocket: WebSocket):
                     "threshold": 0.5,
                     "prefix_padding_ms": 300,
                     "silence_duration_ms": 200,
-                    "create_response": True  # Automaticky vytvořit odpověď po detekci konce řeči
+                    "create_response": True
                 }
             }
         }))
@@ -598,7 +599,7 @@ async def audio_stream(websocket: WebSocket):
 
         # Odeslání úvodního pozdravu
         await websocket.send_text(json.dumps({
-            "type": "response.create",
+            "type": "text.generate",  # Správný typ zprávy pro generování textu
             "text": "Ahoj! Jsem váš AI asistent pro výuku jazyků. Jak vám mohu pomoci?"
         }))
         logger.info("Úvodní pozdrav odeslán")

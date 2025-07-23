@@ -20,7 +20,7 @@ class OpenAIRealtimeService:
     
     def __init__(self):
         self.api_key = os.getenv('OPENAI_API_KEY')
-        self.ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
+        self.ws_url = "wss://api.openai.com/v1/audio/speech"  # Správná URL pro OpenAI Realtime API
         self.openai_ws = None
         self.twilio_ws = None
         self.audio_queue = Queue()
