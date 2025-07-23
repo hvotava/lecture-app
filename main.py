@@ -555,13 +555,14 @@ async def audio_stream(websocket: WebSocket):
                 "modalities": ["audio"],
                 "voice": "alloy",
                 "input_audio_transcription": {
-                    "model": "whisper-1"  # Použití Whisper-1 přímo v API
+                    "model": "whisper-1"
                 },
                 "turn_detection": {
                     "type": "server_vad",
                     "threshold": 0.5,
                     "prefix_padding_ms": 300,
-                    "silence_duration_ms": 200
+                    "silence_duration_ms": 200,
+                    "create_response": True  # Automaticky vytvořit odpověď po detekci konce řeči
                 }
             }
         }))
@@ -574,6 +575,7 @@ async def audio_stream(websocket: WebSocket):
     stream_sid = None
     inbound_buffer = bytearray()  # Buffer pro příchozí audio (od uživatele)
     last_audio_time = None
+    is_responding = False  # Flag pro sledování, zda právě probíhá odpověď
 
     async def safe_send_text(msg):
         try:
@@ -620,8 +622,34 @@ async def audio_stream(websocket: WebSocket):
                                 logger.error(f"Chyba při odesílání do OpenAI Realtime: {e}")
 
                     elif track == "outbound":  # Audio od AI
-                        # Pouze logujeme pro případnou analýzu
-                        logger.info(f"[AUDIO-CHUNK] Outbound audio chunk #{seq}, velikost: {len(base64.b64decode(payload))} bytes")
+                        # Přepošleme audio zpět do Twilia
+                        try:
+                            media_message = {
+                                "event": "media",
+                                "streamSid": stream_sid,
+                                "media": {
+                                    "payload": payload  # Použijeme původní base64 payload
+                                }
+                            }
+                            await safe_send_text(json.dumps(media_message))
+                            logger.info(f"[AUDIO-CHUNK] Outbound audio chunk #{seq} přeposlán do Twilia")
+                        except Exception as e:
+                            logger.error(f"Chyba při přeposílání outbound audia: {e}")
+
+                elif event == "input_audio_buffer.speech_stopped":
+                    # Když uživatel přestane mluvit, vytvoříme response
+                    if not is_responding:
+                        try:
+                            await safe_send_text(json.dumps({"type": "response.create"}))
+                            is_responding = True
+                            logger.info("Vytvářím odpověď po detekci konce řeči")
+                        except Exception as e:
+                            logger.error(f"Chyba při vytváření odpovědi: {e}")
+
+                elif event == "response.done":
+                    # Odpověď byla dokončena
+                    is_responding = False
+                    logger.info("Odpověď dokončena")
 
                 elif event == "stop":
                     logger.info("Media Stream ukončen")
@@ -634,8 +662,16 @@ async def audio_stream(websocket: WebSocket):
                             }
                             await safe_send_text(json.dumps(media_message))
                             logger.info(f"[MEDIA] Poslední inbound audio odesláno do OpenAI Realtime ({len(buffer_copy)} bytes)")
+
+                            # Vytvoříme poslední odpověď
+                            if not is_responding:
+                                await safe_send_text(json.dumps({"type": "response.create"}))
+                                logger.info("Vytvářím poslední odpověď")
                         except Exception as e:
                             logger.error(f"Chyba při odesílání posledního audia: {e}")
+
+                    # Počkáme chvíli na dokončení odpovědi
+                    await asyncio.sleep(2)
                     try:
                         await websocket.close()
                         logger.info("WebSocket spojení uzavřeno po stream-stopped")
