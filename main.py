@@ -600,6 +600,7 @@ async def audio_stream(websocket: WebSocket):
         import wave
         import audioop
         import io
+        from pydub import AudioSegment
         with io.BytesIO(wav_bytes) as wav_io:
             with wave.open(wav_io, 'rb') as wav_file:
                 n_channels = wav_file.getnchannels()
@@ -607,10 +608,18 @@ async def audio_stream(websocket: WebSocket):
                 framerate = wav_file.getframerate()
                 pcm_data = wav_file.readframes(wav_file.getnframes())
                 logger.info(f"[TTS] WAV parametry: {n_channels}ch, {sampwidth*8}bit, {framerate}Hz, {len(pcm_data)} bytes")
+                # Pokud není správný formát, převedeme pomocí pydub
                 if n_channels != 1 or sampwidth != 2 or framerate != 8000:
-                    logger.error("TTS WAV není mono/16bit/8kHz! Twilio přehraje pouze 8kHz mono μ-law.")
-                    # (volitelně: zde by šel přidat resampling, ale pro OpenAI TTS by mělo být správně)
-                    raise ValueError("TTS WAV není mono/16bit/8kHz!")
+                    logger.warning("Provádím resampling WAV na 8kHz mono 16bit pomocí pydub.")
+                    wav_io.seek(0)
+                    audio = AudioSegment.from_wav(wav_io)
+                    audio = audio.set_channels(1).set_frame_rate(8000).set_sample_width(2)
+                    out_io = io.BytesIO()
+                    audio.export(out_io, format="wav")
+                    out_io.seek(0)
+                    with wave.open(out_io, 'rb') as res_wav:
+                        pcm_data = res_wav.readframes(res_wav.getnframes())
+                        logger.info(f"[TTS] WAV po resamplingu: {res_wav.getnchannels()}ch, {res_wav.getsampwidth()*8}bit, {res_wav.getframerate()}Hz, {len(pcm_data)} bytes")
                 mulaw_data = audioop.lin2ulaw(pcm_data, 2)
                 return mulaw_data
 
