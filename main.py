@@ -505,17 +505,50 @@ async def stream_callback(request: Request):
 async def voice(request: Request, attempt_id: str = Query(None)):
     logger.info("Přijat Twilio webhook na /voice/")
     logger.info(f"Attempt ID: {attempt_id}")
-    response = """<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
-    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
-    <Start>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both_tracks" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
-    </Start>
-    <Pause length="3600"/>
-</Response>"""
+    
+    # Získání parametrů hovoru
+    form = await request.form()
+    caller_country = form.get("CallerCountry", "")
+    to_country = form.get("ToCountry", "")
+    logger.info(f"Volající: {caller_country} -> {to_country}")
+    
+    response = VoiceResponse()
+    
+    # Úvodní hlášení
+    response.say(
+        "Vítejte u AI asistenta pro výuku jazyků.",
+        language="cs-CZ",
+        rate="0.9",
+        voice="Google.cs-CZ-Standard-A"
+    )
+    response.say(
+        "Nyní vás připojuji k AI asistentovi.",
+        language="cs-CZ",
+        rate="0.9",
+        voice="Google.cs-CZ-Standard-A"
+    )
+    
+    # Konfigurace Media Streamu
+    connect = Connect()
+    stream = Stream(
+        url="wss://lecture-app-production.up.railway.app/audio",
+        track="both",  # Správný formát pro obousměrný stream
+        status_callback="https://lecture-app-production.up.railway.app/stream-callback",
+        status_callback_method="POST",
+        media_format={
+            "encoding": "mulaw",  # μ-law encoding
+            "sample_rate": 8000,  # 8kHz sample rate
+            "channels": 1  # Mono audio
+        }
+    )
+    connect.append(stream)
+    response.append(connect)
+    
+    # Dlouhá pauza pro udržení hovoru
+    response.pause(length=3600)
+    
     logger.info(f"TwiML odpověď: {response}")
-    return Response(content=response, media_type="text/xml")
+    return Response(content=str(response), media_type="text/xml")
 
 @app.post("/voice/start-stream/")
 async def voice_start_stream(request: Request):
