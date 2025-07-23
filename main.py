@@ -601,81 +601,66 @@ async def audio_stream(websocket: WebSocket):
         if not openai_service:
             logger.error("OpenAI služba není dostupná")
             return
-            
         try:
             logger.info(f"Zpracovávám audio buffer ({len(audio_bytes)} bytes)")
-            
             # 1. Speech-to-Text pomocí Whisper
             import io
             audio_file = io.BytesIO()
-            
-            # Konverze μ-law na WAV
             import audioop
             import wave
-            linear_data = audioop.ulaw2lin(audio_bytes, 1)  # μ-law to linear
-            
-            # Vytvoření WAV souboru v paměti
+            linear_data = audioop.ulaw2lin(audio_bytes, 1)
             with wave.open(audio_file, 'wb') as wav_file:
-                wav_file.setnchannels(1)  # mono
-                wav_file.setsampwidth(2)  # 16-bit
-                wav_file.setframerate(8000)  # 8kHz
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(8000)
                 wav_file.writeframes(linear_data)
-            
             audio_file.seek(0)
             audio_file.name = "audio.wav"
-            
-            # Whisper API
             transcript = openai_service.client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
                 language="cs"
             )
-            
             user_text = transcript.text.strip()
             if not user_text:
                 logger.info("Prázdná transkripce - ignoruji")
                 return
-                
             logger.info(f"Transkripce: {user_text}")
             conversation_context.append({"role": "user", "content": user_text})
-            
             # 2. Generování odpovědi pomocí GPT
-            system_prompt = f"""Jsi AI asistent pro výuku jazyků. {lesson_context}
-            
-Tvoje úkoly:
-- Pomáhej studentovi s lekcí
-- Odpovídej na otázky týkající se obsahu
-- Buď trpělivý a povzbuzující
-- Odpovídej stručně (max 2-3 věty)
-- Mluv česky"""
-
-            messages = [{"role": "system", "content": system_prompt}] + conversation_context[-10:]  # Posledních 10 zpráv
-            
+            system_prompt = f"""Jsi AI asistent pro výuku jazyků. {lesson_context}\n\nTvoje úkoly:\n- Pomáhej studentovi s lekcí\n- Odpovídej na otázky týkající se obsahu\n- Buď trpělivý a povzbuzující\n- Odpovídej stručně (max 2-3 věty)\n- Mluv česky"""
+            messages = [{"role": "system", "content": system_prompt}] + conversation_context[-10:]
             response = openai_service.client.chat.completions.create(
                 model="gpt-4",
                 messages=messages,
                 max_tokens=150,
                 temperature=0.7
             )
-            
             ai_response = response.choices[0].message.content
             logger.info(f"GPT odpověď: {ai_response}")
             conversation_context.append({"role": "assistant", "content": ai_response})
-            
             # 3. Text-to-Speech
+            logger.info(f"Posílám do TTS: {ai_response}")
             tts_response = openai_service.client.audio.speech.create(
                 model="tts-1",
                 voice="alloy",
                 input=ai_response,
                 response_format="wav"
             )
-            
+            logger.info(f"TTS odpověď: {type(tts_response.content)}, velikost: {len(tts_response.content)} bytes")
+            if not tts_response.content or len(tts_response.content) < 100:
+                logger.error("TTS vrátil prázdný nebo příliš krátký audio výstup!")
+                return
             # Konverze TTS audio na správný formát pro Twilio
             tts_audio = tts_response.content
-            
-            # Pošleme audio zpět do Twilio
+            try:
+                import audioop
+                mulaw_data = audioop.lin2ulaw(tts_audio, 2)
+            except Exception as e:
+                logger.error(f"Chyba při převodu na μ-law: {e}")
+                return
             await send_audio_to_twilio(tts_audio)
-            
+            logger.info("Audio odesláno do Twilia (po TTS)")
         except Exception as e:
             logger.error(f"Chyba při zpracování řeči: {e}")
             import traceback
