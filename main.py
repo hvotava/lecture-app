@@ -193,6 +193,85 @@ def admin_call_user(user_id: int = Path(...)):
     
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
+@admin_router.post("/users/{user_id}/call/lesson/{lesson_number}", name="admin_call_user_lesson")
+def admin_call_user_lesson(user_id: int = Path(...), lesson_number: int = Path(...)):
+    """Zavolá uživateli s konkrétní lekcí podle čísla lekce"""
+    session = SessionLocal()
+    try:
+        user = session.query(User).get(user_id)
+        if not user:
+            return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
+        
+        # Najdi lekci podle čísla
+        lesson = session.query(Lesson).filter_by(
+            lesson_number=lesson_number,
+            language=user.language
+        ).first()
+        
+        if not lesson:
+            logger.error(f"Lekce {lesson_number} nenalezena pro jazyk {user.language}")
+            return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
+        
+        # Vytvoření nového pokusu
+        attempt = Attempt(
+            user_id=user.id,
+            lesson_id=lesson.id,
+            next_due=datetime.now()
+        )
+        session.add(attempt)
+        session.commit()
+        
+        # Volání přes Twilio
+        from app.services.twilio_service import TwilioService
+        twilio = TwilioService()
+        base_url = os.getenv("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app")
+        webhook_url = f"{base_url.rstrip('/')}/voice/?attempt_id={attempt.id}"
+        
+        logger.info(f"Volám uživatele {user.phone} s lekcí {lesson_number}: {webhook_url}")
+        twilio.call(user.phone, webhook_url)
+        
+    except Exception as e:
+        logger.error(f"Chyba při volání s lekcí: {e}")
+    finally:
+        session.close()
+    
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
+
+@admin_router.post("/users/{user_id}/advance", name="admin_advance_user")
+def admin_advance_user(user_id: int = Path(...)):
+    """Manuálně posune uživatele do další lekce"""
+    session = SessionLocal()
+    try:
+        user = session.query(User).get(user_id)
+        if not user:
+            return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
+        
+        if user.current_lesson_level < 10:
+            user.current_lesson_level += 1
+            
+            # Vytvoř progress záznam
+            from app.models import UserProgress
+            progress = UserProgress(
+                user_id=user.id,
+                lesson_number=user.current_lesson_level - 1,  # Předchozí lekce je dokončena
+                is_completed=True,
+                best_score=95.0,  # Manuální postup = vysoké skóre
+                attempts_count=1,
+                first_completed_at=datetime.now()
+            )
+            session.add(progress)
+            session.commit()
+            
+            logger.info(f"Uživatel {user.name} manuálně posunut na lekci {user.current_lesson_level}")
+        
+    except Exception as e:
+        logger.error(f"Chyba při posunu uživatele: {e}")
+        session.rollback()
+    finally:
+        session.close()
+    
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
+
 @admin_router.get("/lessons", response_class=HTMLResponse, name="admin_list_lessons")
 def admin_list_lessons(request: Request):
     session = SessionLocal()
@@ -641,7 +720,7 @@ async def process_speech(request: Request):
     response = VoiceResponse()
     
     if speech_result:
-        # OpenAI GPT odpověď
+        # OpenAI GPT odpověď s vyhodnocením
         try:
             openai_api_key = os.getenv('OPENAI_API_KEY')
             if openai_api_key:
@@ -650,30 +729,82 @@ async def process_speech(request: Request):
                 
                 logger.info("🤖 Generuji odpověď pomocí OpenAI GPT...")
                 
+                # Rozšířený prompt pro vyhodnocení odpovědí
+                system_prompt = """Jsi AI asistent pro výuku obráběcích kapalin a servisu. Komunikuješ POUZE v češtině.
+
+INSTRUKCE PRO VYHODNOCENÍ:
+1. Vyhodnoť správnost odpovědi studenta (0-100%)
+2. Poskytni krátkou zpětnou vazbu (max 2 věty)
+3. Na konci odpovědi VŽDY přidej skóre ve formátu: [SKÓRE: XX%]
+
+PŘÍKLADY HODNOCENÍ:
+- Úplně správná odpověď: [SKÓRE: 100%]
+- Částečně správná: [SKÓRE: 70%]
+- Nesprávná odpověď: [SKÓRE: 20%]
+
+Buď povzbuzující a konstruktivní. Pomáhej studentovi se učit."""
+
                 gpt_response = client.chat.completions.create(
-                    model="gpt-4o-mini",  # Levnější než GPT-4, stále kvalitní
+                    model="gpt-4o-mini",
                     messages=[
-                        {
-                            "role": "system",
-                            "content": """Jsi AI asistent pro výuku jazyků. Komunikuješ POUZE v češtině. 
-                            Jsi trpělivý, povzbuzující a pomáháš studentům s učením. 
-                            Odpovídej stručně a jasně (max 2-3 věty). 
-                            Pokud student položí otázku, odpověz užitečně a zeptej se na další otázku."""
-                        },
-                        {
-                            "role": "user", 
-                            "content": speech_result
-                        }
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"Student odpověděl: '{speech_result}'. Vyhodnoť jeho odpověď a poskytni zpětnou vazbu."}
                     ],
-                    max_tokens=100,  # Sníženo z 150 na 100 pro úsporu
+                    max_tokens=150,
                     temperature=0.7
                 )
                 
                 ai_answer = gpt_response.choices[0].message.content
                 logger.info(f"🤖 OpenAI odpověď: {ai_answer}")
                 
+                # Extrakce skóre z odpovědi
+                import re
+                score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
+                current_score = int(score_match.group(1)) if score_match else 0
+                
+                # Odstranění skóre z odpovědi pro TTS
+                clean_answer = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
+                
+                logger.info(f"📊 Vyhodnocené skóre: {current_score}%")
+                
+                # Kontrola postupu do další lekce (simulace - v reálné aplikaci by se načetl attempt_id)
+                session = SessionLocal()
+                try:
+                    # Pro demo - najdi posledního uživatele (v reálné aplikaci by se použil attempt_id)
+                    user = session.query(User).order_by(User.id.desc()).first()
+                    
+                    if user and current_score >= 90 and user.current_lesson_level == 0:
+                        # Postup z vstupního testu do lekce 1
+                        user.current_lesson_level = 1
+                        
+                        # Vytvoř progress záznam
+                        from app.models import UserProgress
+                        progress = UserProgress(
+                            user_id=user.id,
+                            lesson_number=0,  # Dokončena lekce 0
+                            is_completed=True,
+                            best_score=float(current_score),
+                            attempts_count=1,
+                            first_completed_at=datetime.now()
+                        )
+                        session.add(progress)
+                        session.commit()
+                        
+                        logger.info(f"🎉 Uživatel {user.name} postoupil do lekce 1 se skóre {current_score}%")
+                        
+                        # Přidej gratulaci do odpovědi
+                        clean_answer += f" Gratulujeme! Dosáhli jste {current_score}% a postoupili do Lekce 1!"
+                        
+                    elif user and current_score < 90 and user.current_lesson_level == 0:
+                        clean_answer += f" Dosáhli jste {current_score}%. Pro postup potřebujete alespoň 90%. Zkuste to znovu!"
+                        
+                except Exception as db_error:
+                    logger.error(f"Chyba při aktualizaci pokroku: {db_error}")
+                finally:
+                    session.close()
+                
                 response.say(
-                    ai_answer,
+                    clean_answer,
                     language="cs-CZ",
                     rate="0.9",
                     voice="Google.cs-CZ-Standard-A"

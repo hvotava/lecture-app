@@ -13,8 +13,10 @@ class User(Base):
     level = mapped_column(String(20), nullable=True, default="beginner")
     language = mapped_column(String(2), nullable=True, default="cs")
     detail = mapped_column(Text, nullable=True)
+    current_lesson_level = mapped_column(Integer, nullable=False, default=0)  # Nové: aktuální úroveň lekce
     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     attempts = relationship("Attempt", back_populates="user")
+    progress = relationship("UserProgress", back_populates="user")
 
 class Lesson(Base):
     __tablename__ = "lessons"
@@ -24,8 +26,12 @@ class Lesson(Base):
     script = mapped_column(Text, nullable=False)
     questions = mapped_column(JSON, nullable=False)
     level = mapped_column(String(20), nullable=False, default="beginner")
+    lesson_number = mapped_column(Integer, nullable=False, default=0)  # Nové: číslo lekce (0, 1, 2, ...)
+    required_score = mapped_column(Float, nullable=False, default=90.0)  # Nové: požadované skóre pro postup
+    lesson_type = mapped_column(String(20), nullable=False, default="standard")  # Nové: "entry_test", "standard", "advanced"
     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     attempts = relationship("Attempt", back_populates="lesson")
+    
     def get_next_question(self) -> Optional[dict]:
         if not self.questions.get("all"):
             return None
@@ -42,6 +48,20 @@ class Lesson(Base):
             "current": next_question["question"],
             "answer": next_question["answer"]
         }
+
+class UserProgress(Base):
+    """Nový model pro sledování pokroku uživatele"""
+    __tablename__ = "user_progress"
+    id = mapped_column(Integer, primary_key=True)
+    user_id = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    lesson_number = mapped_column(Integer, nullable=False)
+    is_completed = mapped_column(Boolean, nullable=False, default=False)
+    best_score = mapped_column(Float, nullable=True)
+    attempts_count = mapped_column(Integer, nullable=False, default=0)
+    first_completed_at = mapped_column(DateTime, nullable=True)
+    last_attempt_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    user = relationship("User", back_populates="progress")
 
 class Answer(Base):
     __tablename__ = "answers"
@@ -72,6 +92,7 @@ class Attempt(Base):
     user = relationship("User", back_populates="attempts")
     lesson = relationship("Lesson", back_populates="attempts")
     answers = relationship("Answer", back_populates="attempt")
+    
     def calculate_next_due(self) -> None:
         if self.score is None:
             self.next_due = datetime.utcnow() + timedelta(days=1)
@@ -81,6 +102,7 @@ class Attempt(Base):
             self.next_due = datetime.utcnow() + timedelta(days=7)
         else:
             self.next_due = datetime.utcnow() + timedelta(days=30) 
+            
     def calculate_overall_score(self) -> float:
         if not self.answers:
             return 0.0

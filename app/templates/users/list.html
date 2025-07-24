@@ -16,6 +16,8 @@
                 <th>Jméno</th>
                 <th>Telefon</th>
                 <th>Jazyk</th>
+                <th>Aktuální lekce</th>
+                <th>Pokrok</th>
                 <th>Detail</th>
                 <th>Akce</th>
             </tr>
@@ -27,6 +29,27 @@
                 <td>{{ user.name }}</td>
                 <td>{{ user.phone }}</td>
                 <td>{{ user.language }}</td>
+                <td>
+                    <span class="badge bg-{% if user.current_lesson_level == 0 %}warning{% else %}primary{% endif %}">
+                        Lekce {{ user.current_lesson_level }}
+                        {% if user.current_lesson_level == 0 %}
+                            <small>(Vstupní test)</small>
+                        {% endif %}
+                    </span>
+                </td>
+                <td>
+                    <div class="progress" style="width: 120px;">
+                        {% set progress_percent = (user.current_lesson_level / 10) * 100 %}
+                        <div class="progress-bar" role="progressbar" 
+                             style="width: {{ progress_percent }}%" 
+                             aria-valuenow="{{ progress_percent }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            {{ progress_percent|int }}%
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ user.current_lesson_level }}/10 lekcí</small>
+                </td>
                 <td>{{ user.detail }}</td>
                 <td>
                     <div class="btn-group">
@@ -34,14 +57,60 @@
                         <form action="{{ request.url_for('admin_delete_user', user_id=user.id) }}" method="post" class="d-inline">
                             <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Opravdu chcete smazat tohoto uživatele?')">Smazat</button>
                         </form>
-                        <form action="{{ request.url_for('admin_call_user', user_id=user.id) }}" method="post" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-success">Zavolat</button>
+                        
+                        <!-- Dynamické tlačítko volání podle aktuální lekce -->
+                        <form action="{{ request.url_for('admin_call_user_lesson', user_id=user.id, lesson_number=user.current_lesson_level) }}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-success">
+                                {% if user.current_lesson_level == 0 %}
+                                    📝 Vstupní test
+                                {% else %}
+                                    📞 Lekce {{ user.current_lesson_level }}
+                                {% endif %}
+                            </button>
                         </form>
+                        
+                        <!-- Tlačítko pro postup do další lekce (pouze pro adminy) -->
+                        {% if user.current_lesson_level < 10 %}
+                        <form action="{{ request.url_for('admin_advance_user', user_id=user.id) }}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-info" 
+                                    onclick="return confirm('Posunout uživatele do další lekce?')" 
+                                    title="Manuální postup do další lekce">
+                                ⬆️ Postup
+                            </button>
+                        </form>
+                        {% endif %}
                     </div>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+</div>
+
+<div class="mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h5>📊 Legenda systému lekcí</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Struktura lekcí:</h6>
+                    <ul class="list-unstyled">
+                        <li><span class="badge bg-warning">Lekce 0</span> - Vstupní test (30 otázek, 90% pro postup)</li>
+                        <li><span class="badge bg-primary">Lekce 1-10</span> - Pokročilé lekce obráběcích kapalin</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>Postup:</h6>
+                    <ul class="list-unstyled">
+                        <li>✅ <strong>Automatický:</strong> AI asistent vyhodnocuje odpovědi</li>
+                        <li>⬆️ <strong>Manuální:</strong> Admin může posunout uživatele</li>
+                        <li>📞 <strong>Volání:</strong> Spustí aktuální lekci uživatele</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %} 
