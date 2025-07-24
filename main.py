@@ -650,9 +650,31 @@ def admin_create_lesson_0(request: Request):
 @admin_router.get("/lessons", response_class=HTMLResponse, name="admin_list_lessons")
 def admin_list_lessons(request: Request):
     session = SessionLocal()
-    lessons = session.query(Lesson).order_by(Lesson.id.desc()).all()
-    session.close()
-    return templates.TemplateResponse("lessons/list.html", {"request": request, "lessons": lessons})
+    try:
+        # FORCE migrace pro přidání description sloupce
+        try:
+            session.execute(text("ALTER TABLE lessons ADD COLUMN description TEXT"))
+            session.commit()
+            logger.info("✅ Description sloupec přidán")
+        except Exception as e:
+            if "already exists" in str(e) or "duplicate column" in str(e):
+                logger.info("✅ Description sloupec již existuje")
+            else:
+                logger.warning(f"Chyba při přidávání description sloupce: {e}")
+            session.rollback()
+        
+        lessons = session.query(Lesson).order_by(Lesson.id.desc()).all()
+        session.close()
+        return templates.TemplateResponse("lessons/list.html", {"request": request, "lessons": lessons})
+    except Exception as e:
+        session.close()
+        logger.error(f"❌ Chyba při načítání lekcí: {e}")
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"❌ Chyba při načítání lekcí: {str(e)}",
+            "back_url": "/admin/users",
+            "back_text": "Zpět na uživatele"
+        })
 
 @admin_router.get("/lessons/new", response_class=HTMLResponse, name="admin_new_lesson_get")
 def admin_new_lesson_get(request: Request):
