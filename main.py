@@ -920,6 +920,10 @@ Vždy zůstávej v roli učitele jazyků a komunikuj pouze v češtině.""",
         initial_message = "Ahoj! Jsem AI asistent pro výuku jazyků. Jak vám mohu pomoci?"
         initial_message_sent = False
         
+        # Okamžitá úvodní zpráva (bez čekání na stream_sid)
+        welcome_message = "Připojuji se k AI asistentovi. Moment prosím."
+        welcome_sent = False
+        
         # Keepalive task pro udržení WebSocket připojení
         keepalive_task = None
         websocket_active = True  # Flag pro sledování stavu připojení
@@ -987,9 +991,16 @@ Vždy zůstávej v roli učitele jazyků a komunikuj pouze v češtině.""",
                         keepalive_task = asyncio.create_task(keepalive_sender())
                         logger.info("💓 Keepalive task spuštěn")
                     
-                    # Pošleme úvodní zprávu nyní když máme stream_sid
+                    # Pošleme okamžitou welcome zprávu
+                    if not welcome_sent:
+                        logger.info("🔊 Odesílám welcome zprávu")
+                        await send_tts_to_twilio(websocket, welcome_message, stream_sid, client)
+                        welcome_sent = True
+                    
+                    # Pošleme úvodní zprávu po krátké pauze
                     if not initial_message_sent:
-                        await asyncio.sleep(2)  # Krátká pauza po uvítání
+                        await asyncio.sleep(3)  # Krátká pauza po welcome zprávě
+                        logger.info("🔊 Odesílám úvodní zprávu")
                         await send_tts_to_twilio(websocket, initial_message, stream_sid, client)
                         initial_message_sent = True
                     
@@ -1002,27 +1013,31 @@ Vždy zůstávej v roli učitele jazyků a komunikuj pouze v češtině.""",
                         audio_data = base64.b64decode(payload)
                         audio_buffer.extend(audio_data)
                         
-                        # Zpracujeme audio každých 2 sekundy (cca 160 chunků)
-                        if len(audio_buffer) >= 3200:  # ~2 sekundy audio při 8kHz
-                            logger.info(f"🎧 Zpracovávám audio chunk ({len(audio_buffer)} bajtů)")
+                        logger.debug(f"📊 Audio buffer: {len(audio_buffer)} bajtů")
+                        
+                        # Zpracujeme audio každých 800 bajtů (~1 sekunda audio při 8kHz)
+                        if len(audio_buffer) >= 800:  # ~1 sekunda audio při 8kHz
+                            logger.info(f"🎧 Zpracovávám audio chunk ({len(audio_buffer)} bajtů) - PRÁH DOSAŽEN!")
+                            
+                            # Zkopírujeme buffer před vymazáním
+                            audio_to_process = bytes(audio_buffer)
+                            audio_buffer.clear()
                             
                             # Zpracujeme audio v background tasku
                             asyncio.create_task(
                                 process_audio_chunk(
-                                    websocket, bytes(audio_buffer), stream_sid, 
+                                    websocket, audio_to_process, stream_sid, 
                                     client, assistant_id, thread.id
                                 )
                             )
-                            
-                            # Vymažeme buffer
-                            audio_buffer.clear()
                         
                 elif event == "stop":
                     logger.info("Media Stream ukončen")
                     websocket_active = False
                     
-                    # Zpracujeme zbývající audio
-                    if audio_buffer:
+                    # Zpracujeme zbývající audio i když je malé
+                    if audio_buffer and len(audio_buffer) > 100:  # Alespoň 100 bajtů
+                        logger.info(f"🎧 Zpracovávám zbývající audio ({len(audio_buffer)} bajtů)")
                         await process_audio_chunk(
                             websocket, bytes(audio_buffer), stream_sid, 
                             client, assistant_id, thread.id
