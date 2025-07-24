@@ -653,12 +653,11 @@ async def send_tts_to_twilio(websocket: WebSocket, text: str, stream_sid: str, c
     try:
         # Kontrola jestli je WebSocket stále připojen
         try:
-            # Kontrola stavu WebSocket
-            if hasattr(websocket, 'client_state') and websocket.client_state.name != "CONNECTED":
-                logger.warning("WebSocket není v CONNECTED stavu, přeskakujem TTS")
-                return
-        except Exception as state_error:
-            logger.warning(f"WebSocket state check failed: {state_error}")
+            # Ping test pro ověření připojení
+            await websocket.ping()
+            logger.debug("TTS: WebSocket ping OK")
+        except Exception as ping_error:
+            logger.warning(f"TTS: WebSocket ping failed: {ping_error}")
             logger.warning("WebSocket není připojen, přeskakujem TTS")
             return
             
@@ -961,8 +960,13 @@ Vždy zůstávej v roli učitele jazyků a komunikuj pouze v češtině.""",
                 logger.info("DEBUG: Čekám na WebSocket data...")
                 
                 # Kontrola stavu WebSocket před čtením
-                if hasattr(websocket, 'client_state') and websocket.client_state.name == "DISCONNECTED":
-                    logger.info("DEBUG: WebSocket je DISCONNECTED, ukončujem smyčku")
+                try:
+                    # Pokusíme se o rychlý ping test
+                    await websocket.ping()
+                    logger.debug("DEBUG: WebSocket ping OK")
+                except Exception as ping_error:
+                    logger.info(f"DEBUG: WebSocket ping failed: {ping_error}")
+                    logger.info("DEBUG: WebSocket je pravděpodobně zavřen, ukončujem smyčku")
                     websocket_active = False
                     break
                 
@@ -1035,13 +1039,18 @@ Vždy zůstávej v roli učitele jazyků a komunikuj pouze v češtině.""",
                 websocket_active = False
                 break
             except Exception as e:
-                logger.error(f"DEBUG: Chyba při zpracování zprávy: {e}")
-                # Zkontrolujeme jestli je to WebSocket disconnect
-                if "WebSocket" in str(e) or "disconnect" in str(e).lower():
+                error_msg = str(e)
+                logger.error(f"DEBUG: Chyba při zpracování zprávy: {error_msg}")
+                
+                # Zkontrolujeme různé typy WebSocket chyb
+                if any(keyword in error_msg.lower() for keyword in [
+                    "websocket", "disconnect", "connection", "closed", "broken pipe"
+                ]):
                     logger.info("DEBUG: Detekováno WebSocket odpojení")
                     websocket_active = False
                     break
-                # Jinak pokračujeme
+                    
+                # Pro ostatní chyby pokračujeme
                 continue
                     
     except Exception as e:
