@@ -13,10 +13,10 @@ class User(Base):
     level = mapped_column(String(20), nullable=True, default="beginner")
     language = mapped_column(String(2), nullable=True, default="cs")
     detail = mapped_column(Text, nullable=True)
-    current_lesson_level = mapped_column(Integer, nullable=False, default=0)  # Nové: aktuální úroveň lekce
+    # current_lesson_level = mapped_column(Integer, nullable=False, default=0)  # DOČASNĚ VYPNUTO
     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     attempts = relationship("Attempt", back_populates="user")
-    progress = relationship("UserProgress", back_populates="user")
+    # progress = relationship("UserProgress", back_populates="user")  # DOČASNĚ VYPNUTO
 
 class Lesson(Base):
     __tablename__ = "lessons"
@@ -26,9 +26,9 @@ class Lesson(Base):
     script = mapped_column(Text, nullable=False)
     questions = mapped_column(JSON, nullable=False)
     level = mapped_column(String(20), nullable=False, default="beginner")
-    lesson_number = mapped_column(Integer, nullable=False, default=0)  # Nové: číslo lekce (0, 1, 2, ...)
-    required_score = mapped_column(Float, nullable=False, default=90.0)  # Nové: požadované skóre pro postup
-    lesson_type = mapped_column(String(20), nullable=False, default="standard")  # Nové: "entry_test", "standard", "advanced"
+    # lesson_number = mapped_column(Integer, nullable=False, default=0)  # DOČASNĚ VYPNUTO
+    # required_score = mapped_column(Float, nullable=False, default=90.0)  # DOČASNĚ VYPNUTO
+    # lesson_type = mapped_column(String(20), nullable=False, default="standard")  # DOČASNĚ VYPNUTO
     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     attempts = relationship("Attempt", back_populates="lesson")
     
@@ -49,19 +49,19 @@ class Lesson(Base):
             "answer": next_question["answer"]
         }
 
-class UserProgress(Base):
-    """Nový model pro sledování pokroku uživatele"""
-    __tablename__ = "user_progress"
-    id = mapped_column(Integer, primary_key=True)
-    user_id = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    lesson_number = mapped_column(Integer, nullable=False)
-    is_completed = mapped_column(Boolean, nullable=False, default=False)
-    best_score = mapped_column(Float, nullable=True)
-    attempts_count = mapped_column(Integer, nullable=False, default=0)
-    first_completed_at = mapped_column(DateTime, nullable=True)
-    last_attempt_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    user = relationship("User", back_populates="progress")
+# class UserProgress(Base):  # DOČASNĚ VYPNUTO
+#     """Nový model pro sledování pokroku uživatele"""
+#     __tablename__ = "user_progress"
+#     id = mapped_column(Integer, primary_key=True)
+#     user_id = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+#     lesson_number = mapped_column(Integer, nullable=False)
+#     is_completed = mapped_column(Boolean, nullable=False, default=False)
+#     best_score = mapped_column(Float, nullable=True)
+#     attempts_count = mapped_column(Integer, nullable=False, default=0)
+#     first_completed_at = mapped_column(DateTime, nullable=True)
+#     last_attempt_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+#     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+#     user = relationship("User", back_populates="progress")
 
 class Answer(Base):
     __tablename__ = "answers"

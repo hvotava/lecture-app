@@ -169,9 +169,7 @@ def admin_new_user_post(request: Request, name: str = Form(...), phone: str = Fo
     if any(errors.values()):
         return templates.TemplateResponse("users/form.html", {"request": request, "user": None, "form": {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": errors["name"], "phone.errors": errors["phone"], "language.errors": errors["language"], "detail.errors": errors["detail"]}})
     user = User(name=name, phone=phone, language=language, detail=detail)
-    # Zajisti kompatibilitu se starou databází
-    if hasattr(user, 'current_lesson_level'):
-        user.current_lesson_level = 0
+    # Dočasně bez current_lesson_level
     session = SessionLocal()
     session.add(user)
     try:
