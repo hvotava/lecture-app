@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        {% if "✅" in message or "🎉" in message %}
+                            <i class="fas fa-check-circle text-success" style="font-size: 3rem;"></i>
+                        {% elif "❌" in message %}
+                            <i class="fas fa-exclamation-circle text-danger" style="font-size: 3rem;"></i>
+                        {% else %}
+                            <i class="fas fa-info-circle text-info" style="font-size: 3rem;"></i>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-4">
+                        <pre style="white-space: pre-line; font-family: inherit; background: none; border: none; text-align: center;">{{ message }}</pre>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{{ back_url }}" class="btn btn-primary">
+                            <i class="fas fa-arrow-left"></i> {{ back_text }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
