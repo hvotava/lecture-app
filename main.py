@@ -701,16 +701,37 @@ async def send_tts_to_twilio(websocket: WebSocket, text: str, stream_sid: str, c
     except Exception as e:
         logger.error(f"Chyba při TTS: {e}")
 
-async def process_audio_with_assistant(websocket: WebSocket, audio_buffer: bytearray, 
-                                     stream_sid: str, client, assistant_id: str, thread_id: str):
-    """Zpracuje audio pomocí OpenAI Assistant API"""
+async def process_audio_chunk(websocket: WebSocket, audio_data: bytes, 
+                             stream_sid: str, client, assistant_id: str, thread_id: str):
+    """Zpracuje audio chunk pomocí OpenAI Assistant API v real-time"""
     try:
-        logger.info(f"🎧 Zpracovávám audio buffer ({len(audio_buffer)} bajtů)")
+        if len(audio_data) < 1000:  # Příliš malý chunk, ignorujeme
+            return
+            
+        logger.info(f"🎧 Zpracovávám audio chunk ({len(audio_data)} bajtů)")
         
         # Uložíme audio do dočasného souboru
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-            tmp_file.write(audio_buffer)
+            # Vytvoříme jednoduchý WAV header pro μ-law audio
+            import struct
+            
+            # WAV header pro μ-law, 8kHz, mono
+            wav_header = struct.pack('<4sI4s4sIHHIIHH4sI',
+                b'RIFF', len(audio_data) + 44 - 8,  # File size
+                b'WAVE',
+                b'fmt ', 16,  # Format chunk size
+                7,  # μ-law format
+                1,  # Mono
+                8000,  # Sample rate
+                8000,  # Byte rate
+                1,  # Block align
+                8,  # Bits per sample
+                b'data', len(audio_data)
+            )
+            
+            tmp_file.write(wav_header)
+            tmp_file.write(audio_data)
             tmp_file_path = tmp_file.name
         
         try:
@@ -722,11 +743,11 @@ async def process_audio_with_assistant(websocket: WebSocket, audio_buffer: bytea
                     language="cs"
                 )
             
-            user_text = transcript.text
-            logger.info(f"📝 Transkripce: {user_text}")
+            user_text = transcript.text.strip()
+            logger.info(f"📝 Transkripce: '{user_text}'")
             
-            if not user_text.strip():
-                logger.info("Prázdná transkripce, ignoruji")
+            if not user_text or len(user_text) < 3:
+                logger.info("Příliš krátká transkripce, ignoruji")
                 return
             
             # Přidáme zprávu do threadu
@@ -742,32 +763,33 @@ async def process_audio_with_assistant(websocket: WebSocket, audio_buffer: bytea
                 assistant_id=assistant_id
             )
             
-            # Čekáme na dokončení
+            # Čekáme na dokončení (s timeout)
             import time
-            max_wait = 30  # 30 sekund timeout
+            max_wait = 15  # 15 sekund timeout pro rychlejší odpověď
             start_time = time.time()
             
             while run.status in ["queued", "in_progress"] and (time.time() - start_time) < max_wait:
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)  # Kratší interval pro rychlejší odpověď
                 run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
             
             if run.status == "completed":
-                # Získáme odpověď
-                messages = client.beta.threads.messages.list(thread_id=thread_id)
+                # Získáme nejnovější odpověď
+                messages = client.beta.threads.messages.list(thread_id=thread_id, limit=1)
                 
                 for message in messages.data:
                     if message.role == "assistant":
                         for content in message.content:
                             if content.type == "text":
                                 assistant_response = content.text.value
-                                logger.info(f"🤖 Assistant odpověď: {assistant_response}")
+                                logger.info(f"🤖 Assistant odpověď: '{assistant_response}'")
                                 
                                 # Pošleme jako TTS
                                 await send_tts_to_twilio(websocket, assistant_response, stream_sid, client)
                                 return
+                
+                logger.warning("Žádná assistant odpověď nenalezena")
             else:
-                logger.error(f"Assistant run failed: {run.status}")
-                await send_tts_to_twilio(websocket, "Omlouvám se, nastala chyba při zpracování.", stream_sid, client)
+                logger.warning(f"Assistant run neúspěšný: {run.status}")
                 
         finally:
             # Vyčistíme dočasný soubor
@@ -781,7 +803,6 @@ async def process_audio_with_assistant(websocket: WebSocket, audio_buffer: bytea
         logger.error(f"Chyba při zpracování audio: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
-        await send_tts_to_twilio(websocket, "Omlouvám se, nerozuměl jsem.", stream_sid, client)
 
 @app.websocket("/audio-test")
 async def audio_stream_test(websocket: WebSocket):
@@ -846,8 +867,43 @@ async def audio_stream(websocket: WebSocket):
     import openai
     client = openai.OpenAI(api_key=openai_api_key)
     
-    # Váš Assistant ID
-    assistant_id = "asst_W6120kPP1lLBzU5OQLYvH6W1"
+    # Vytvoříme nového assistanta s českými instrukcemi pro výuku jazyků
+    try:
+        assistant = client.beta.assistants.create(
+            name="AI Asistent pro výuku jazyků",
+            instructions="""Jsi AI asistent pro výuku jazyků. Komunikuješ POUZE v češtině.
+
+TVOJE ROLE:
+- Pomáháš studentům s výukou jazyků
+- Mluvíš pouze česky, přirozeně a srozumitelně
+- Jsi trpělivý, povzbuzující a přátelský
+- Odpovídáš stručně a jasně
+
+TVOJE ÚKOLY:
+- Odpovídej na otázky studentů
+- Vysvětluj jazykové koncepty
+- Poskytuj zpětnou vazbu na odpovědi
+- Kladeš jednoduché otázky pro ověření porozumění
+- Buď konstruktivní a motivující
+
+STYL KOMUNIKACE:
+- Používej přirozený konverzační styl
+- Krátké, srozumitelné věty
+- Pozitivní přístup
+- Pokud student něco neví, vysvětli to jednoduše
+
+Vždy zůstávej v roli učitele jazyků a komunikuj pouze v češtině.""",
+            model="gpt-4-1106-preview",
+            tools=[]
+        )
+        assistant_id = assistant.id
+        logger.info(f"✅ Vytvořen nový Assistant: {assistant_id}")
+    except Exception as e:
+        logger.error(f"Chyba při vytváření Assistanta: {e}")
+        # Fallback na existující Assistant
+        assistant_id = "asst_W6120kPP1lLBzU5OQLYvH6W1"
+        logger.info(f"🔄 Používám existující Assistant: {assistant_id}")
+    
     thread = None
     
     try:
@@ -938,18 +994,33 @@ async def audio_stream(websocket: WebSocket):
                     track = msg["media"]["track"]
                     
                     if track == "inbound":
-                        # Shromažďujeme audio data
+                        # Real-time zpracování - zpracujeme audio ihned
                         audio_data = base64.b64decode(payload)
                         audio_buffer.extend(audio_data)
+                        
+                        # Zpracujeme audio každých 2 sekundy (cca 160 chunků)
+                        if len(audio_buffer) >= 3200:  # ~2 sekundy audio při 8kHz
+                            logger.info(f"🎧 Zpracovávám audio chunk ({len(audio_buffer)} bajtů)")
+                            
+                            # Zpracujeme audio v background tasku
+                            asyncio.create_task(
+                                process_audio_chunk(
+                                    websocket, bytes(audio_buffer), stream_sid, 
+                                    client, assistant_id, thread.id
+                                )
+                            )
+                            
+                            # Vymažeme buffer
+                            audio_buffer.clear()
                         
                 elif event == "stop":
                     logger.info("Media Stream ukončen")
                     websocket_active = False
                     
+                    # Zpracujeme zbývající audio
                     if audio_buffer:
-                        # Zpracujeme nashromážděné audio
-                        await process_audio_with_assistant(
-                            websocket, audio_buffer, stream_sid, 
+                        await process_audio_chunk(
+                            websocket, bytes(audio_buffer), stream_sid, 
                             client, assistant_id, thread.id
                         )
                     break
