@@ -67,23 +67,75 @@ def admin_root(request: Request):
 def admin_list_users(request: Request):
     session = SessionLocal()
     try:
-        # Automatická migrace - přidej chybějící sloupce
-        try:
-            # Test jestli current_lesson_level existuje
-            session.execute(text("SELECT current_lesson_level FROM users LIMIT 1"))
-        except Exception:
-            # Sloupec neexistuje, přidej ho
-            logger.info("🔧 Přidávám chybějící sloupec current_lesson_level")
-            try:
-                session.execute(text("ALTER TABLE users ADD COLUMN current_lesson_level INTEGER DEFAULT 0"))
-                session.commit()
-                logger.info("✅ Sloupec current_lesson_level přidán")
-            except Exception as alter_error:
-                logger.warning(f"Chyba při přidávání sloupce: {alter_error}")
-                session.rollback()
+        # FORCE migrace při každém načtení
+        logger.info("🔧 Spouštím force migrace...")
         
-        # Bezpečné načtení uživatelů
-        users = session.query(User).all()
+        # 1. Přidej current_lesson_level do users
+        try:
+            session.execute(text("ALTER TABLE users ADD COLUMN current_lesson_level INTEGER DEFAULT 0"))
+            session.commit()
+            logger.info("✅ current_lesson_level přidán")
+        except Exception as e:
+            if "already exists" in str(e) or "duplicate column" in str(e):
+                logger.info("✅ current_lesson_level již existuje")
+            else:
+                logger.warning(f"Chyba při přidávání current_lesson_level: {e}")
+            session.rollback()
+        
+        # 2. Přidej lesson sloupce
+        try:
+            session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_number INTEGER DEFAULT 0"))
+            session.execute(text("ALTER TABLE lessons ADD COLUMN required_score FLOAT DEFAULT 90.0"))
+            session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_type VARCHAR(20) DEFAULT 'standard'"))
+            session.commit()
+            logger.info("✅ lesson sloupce přidány")
+        except Exception as e:
+            if "already exists" in str(e) or "duplicate column" in str(e):
+                logger.info("✅ lesson sloupce již existují")
+            else:
+                logger.warning(f"Chyba při přidávání lesson sloupců: {e}")
+            session.rollback()
+        
+        # 3. Vytvoř user_progress tabulku
+        try:
+            create_progress_table = """
+            CREATE TABLE IF NOT EXISTS user_progress (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                lesson_number INTEGER NOT NULL,
+                is_completed BOOLEAN DEFAULT FALSE,
+                best_score FLOAT,
+                attempts_count INTEGER DEFAULT 0,
+                first_completed_at TIMESTAMP,
+                last_attempt_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+            session.execute(text(create_progress_table))
+            session.commit()
+            logger.info("✅ user_progress tabulka vytvořena")
+        except Exception as e:
+            logger.warning(f"Chyba při vytváření user_progress: {e}")
+            session.rollback()
+        
+        # Bezpečné načtení uživatelů s fallback
+        try:
+            users = session.query(User).all()
+        except Exception as query_error:
+            logger.error(f"Chyba při načítání uživatelů: {query_error}")
+            # Fallback - načti bez current_lesson_level
+            users_raw = session.execute(text("SELECT id, name, phone, language, detail FROM users")).fetchall()
+            users = []
+            for row in users_raw:
+                user = type('User', (), {
+                    'id': row[0],
+                    'name': row[1], 
+                    'phone': row[2],
+                    'language': row[3],
+                    'detail': row[4],
+                    'current_lesson_level': 0  # Default hodnota
+                })()
+                users.append(user)
         
         # Zajisti, že všichni uživatelé mají current_lesson_level
         for user in users:
@@ -92,7 +144,7 @@ def admin_list_users(request: Request):
         
         return templates.TemplateResponse("users/list.html", {"request": request, "users": users})
     except Exception as e:
-        logger.error(f"❌ Chyba v admin_list_users: {e}")
+        logger.error(f"❌ Kritická chyba v admin_list_users: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         # Fallback - prázdný seznam
@@ -117,6 +169,9 @@ def admin_new_user_post(request: Request, name: str = Form(...), phone: str = Fo
     if any(errors.values()):
         return templates.TemplateResponse("users/form.html", {"request": request, "user": None, "form": {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": errors["name"], "phone.errors": errors["phone"], "language.errors": errors["language"], "detail.errors": errors["detail"]}})
     user = User(name=name, phone=phone, language=language, detail=detail)
+    # Zajisti kompatibilitu se starou databází
+    if hasattr(user, 'current_lesson_level'):
+        user.current_lesson_level = 0
     session = SessionLocal()
     session.add(user)
     try:
