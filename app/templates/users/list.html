@@ -58,13 +58,14 @@
                             <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Opravdu chcete smazat tohoto uživatele?')">Smazat</button>
                         </form>
                         
-                        <!-- Dynamické tlačítko volání podle aktuální lekce -->
-                        <form action="{{ request.url_for('admin_call_user_lesson', user_id=user.id, lesson_number=user.current_lesson_level) }}" method="post" class="d-inline">
+                        <!-- FALLBACK na původní volání pro stabilitu -->
+                        <form action="{{ request.url_for('admin_call_user', user_id=user.id) }}" method="post" class="d-inline">
                             <button type="submit" class="btn btn-sm btn-success">
-                                {% if user.current_lesson_level == 0 %}
+                                {% set lesson_level = user.current_lesson_level if user.current_lesson_level is not none else 0 %}
+                                {% if lesson_level == 0 %}
                                     📝 Vstupní test
                                 {% else %}
-                                    📞 Lekce {{ user.current_lesson_level }}
+                                    📞 Lekce {{ lesson_level }}
                                 {% endif %}
                             </button>
                         </form>

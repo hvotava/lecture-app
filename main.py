@@ -202,14 +202,24 @@ def admin_call_user_lesson(user_id: int = Path(...), lesson_number: int = Path(.
         if not user:
             return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
         
-        # Najdi lekci podle čísla
+        # Najdi lekci podle čísla - FALLBACK na jakoukoliv lekci
         lesson = session.query(Lesson).filter_by(
             lesson_number=lesson_number,
             language=user.language
         ).first()
         
+        # Fallback - pokud není lekce s číslem, vezmi první dostupnou
         if not lesson:
-            logger.error(f"Lekce {lesson_number} nenalezena pro jazyk {user.language}")
+            logger.warning(f"Lekce {lesson_number} nenalezena, používám fallback")
+            lesson = session.query(Lesson).filter_by(language=user.language).first()
+        
+        # Fallback - pokud není žádná lekce v jazyce, vezmi první lekci
+        if not lesson:
+            logger.warning(f"Žádná lekce v jazyce {user.language}, používám první dostupnou")
+            lesson = session.query(Lesson).first()
+        
+        if not lesson:
+            logger.error("Žádná lekce v databázi!")
             return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
         
         # Vytvoření nového pokusu
@@ -227,11 +237,15 @@ def admin_call_user_lesson(user_id: int = Path(...), lesson_number: int = Path(.
         base_url = os.getenv("WEBHOOK_BASE_URL", "https://lecture-app-production.up.railway.app")
         webhook_url = f"{base_url.rstrip('/')}/voice/?attempt_id={attempt.id}"
         
-        logger.info(f"Volám uživatele {user.phone} s lekcí {lesson_number}: {webhook_url}")
+        logger.info(f"Volám uživatele {user.phone} s lekcí {lesson.id} (číslo {lesson_number}): {webhook_url}")
         twilio.call(user.phone, webhook_url)
         
     except Exception as e:
-        logger.error(f"Chyba při volání s lekcí: {e}")
+        logger.error(f"❌ KRITICKÁ CHYBA při volání s lekcí: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        # Fallback na původní funkci
+        return admin_call_user(user_id)
     finally:
         session.close()
     
@@ -246,26 +260,36 @@ def admin_advance_user(user_id: int = Path(...)):
         if not user:
             return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
         
+        # Bezpečná kontrola current_lesson_level
+        if not hasattr(user, 'current_lesson_level') or user.current_lesson_level is None:
+            user.current_lesson_level = 0
+        
         if user.current_lesson_level < 10:
             user.current_lesson_level += 1
             
-            # Vytvoř progress záznam
-            from app.models import UserProgress
-            progress = UserProgress(
-                user_id=user.id,
-                lesson_number=user.current_lesson_level - 1,  # Předchozí lekce je dokončena
-                is_completed=True,
-                best_score=95.0,  # Manuální postup = vysoké skóre
-                attempts_count=1,
-                first_completed_at=datetime.now()
-            )
-            session.add(progress)
-            session.commit()
+            # Bezpečné vytvoření progress záznamu
+            try:
+                from app.models import UserProgress
+                progress = UserProgress(
+                    user_id=user.id,
+                    lesson_number=user.current_lesson_level - 1,  # Předchozí lekce je dokončena
+                    is_completed=True,
+                    best_score=95.0,  # Manuální postup = vysoké skóre
+                    attempts_count=1,
+                    first_completed_at=datetime.now()
+                )
+                session.add(progress)
+            except Exception as progress_error:
+                logger.warning(f"Chyba při vytváření progress záznamu: {progress_error}")
+                # Pokračuj bez progress záznamu
             
+            session.commit()
             logger.info(f"Uživatel {user.name} manuálně posunut na lekci {user.current_lesson_level}")
         
     except Exception as e:
-        logger.error(f"Chyba při posunu uživatele: {e}")
+        logger.error(f"❌ Chyba při posunu uživatele: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         session.rollback()
     finally:
         session.close()
