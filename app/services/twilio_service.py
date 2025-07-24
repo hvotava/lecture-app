@@ -382,7 +382,7 @@ class TwilioService:
         # Připojení na Media Stream
         connect = Connect()
         stream = Stream(
-            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            url="wss://lecture-app-production.up.railway.app/audio",
             track="both"
         )
         connect.append(stream)
@@ -414,7 +414,7 @@ class TwilioService:
         # Připojení na Media Stream
         connect = Connect()
         stream = Stream(
-            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            url="wss://lecture-app-production.up.railway.app/audio",
             track="both"
         )
         connect.append(stream)
@@ -436,7 +436,7 @@ class TwilioService:
         # Připojení na Media Stream
         connect = Connect()
         stream = Stream(
-            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            url="wss://lecture-app-production.up.railway.app/audio",
             track="both"
         )
         connect.append(stream)
@@ -465,7 +465,7 @@ class TwilioService:
         # Připojení na Media Stream
         connect = Connect()
         stream = Stream(
-            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            url="wss://lecture-app-production.up.railway.app/audio",
             track="both"
         )
         connect.append(stream)
@@ -488,7 +488,7 @@ class TwilioService:
         # Připojení na Media Stream
         connect = Connect()
         stream = Stream(
-            url="wss://lecture-app-production.up.railway.app/voice/media-stream",
+            url="wss://lecture-app-production.up.railway.app/audio",
             track="both"
         )
         connect.append(stream)
