@@ -637,14 +637,19 @@ async def wav_to_mulaw(audio_data: bytes) -> bytes:
         return b""
 
 async def send_tts_to_twilio(websocket: WebSocket, text: str, stream_sid: str, client):
-    """Převede text na audio a pošle do Twilio"""
+    """Odešle TTS audio do Twilio WebSocket streamu"""
     try:
-        logger.info(f"🎤 TTS: {text[:50]}...")
+        # Kontrola jestli je WebSocket stále připojen
+        if websocket.client_state.name != "CONNECTED":
+            logger.warning("WebSocket není připojen, přeskakujem TTS")
+            return
+            
+        logger.info(f"🔊 Generuji TTS pro text: '{text[:50]}...'")
         
-        # OpenAI TTS
+        # Generace TTS pomocí OpenAI
         response = client.audio.speech.create(
             model="tts-1",
-            voice="alloy",
+            voice="nova",
             input=text,
             response_format="wav"
         )
@@ -851,6 +856,12 @@ async def audio_stream(websocket: WebSocket):
                 try:
                     while True:
                         await asyncio.sleep(10)  # Každých 10 sekund
+                        
+                        # Kontrola jestli je WebSocket stále připojen
+                        if websocket.client_state.name != "CONNECTED":
+                            logger.info("💓 WebSocket zavřen, ukončujem keepalive")
+                            break
+                            
                         if stream_sid:
                             # Pošleme prázdný media chunk jako keepalive
                             keepalive_msg = {
