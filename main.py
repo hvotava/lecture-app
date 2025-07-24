@@ -773,6 +773,8 @@ async def admin_edit_lesson_post(request: Request, id: int = Path(...)):
             level = form_data.get("level", "beginner")
             enabled_questions = form_data.getlist("enabled_questions")
             
+            logger.info(f"🔍 DEBUG: Přijato {len(enabled_questions)} aktivních otázek: {enabled_questions}")
+            
             if not title:
                 session.close()
                 return templates.TemplateResponse("lessons/edit.html", {
@@ -788,9 +790,18 @@ async def admin_edit_lesson_post(request: Request, id: int = Path(...)):
             
             # Aktualizuj enabled stav otázek
             if lesson.questions and isinstance(lesson.questions, list):
+                logger.info(f"🔍 DEBUG: Aktualizuji {len(lesson.questions)} otázek")
                 for i, question in enumerate(lesson.questions):
                     if isinstance(question, dict):
-                        question['enabled'] = str(i) in enabled_questions
+                        old_enabled = question.get('enabled', True)
+                        new_enabled = str(i) in enabled_questions
+                        question['enabled'] = new_enabled
+                        logger.info(f"🔍 DEBUG: Otázka {i}: {old_enabled} → {new_enabled}")
+                
+                # KRITICKÉ: Oznám SQLAlchemy, že se JSON sloupec změnil
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(lesson, 'questions')
+                logger.info("🔍 DEBUG: flag_modified() zavolán pro questions sloupec")
             
             session.commit()
             logger.info(f"✅ Lekce {lesson.id} aktualizována: {len(enabled_questions)} aktivních otázek")
