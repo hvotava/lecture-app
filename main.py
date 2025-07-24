@@ -625,7 +625,35 @@ async def audio_stream(websocket: WebSocket):
             ssl_context = ssl.create_default_context()
             # Na Railway.com by toto nemělo být potřeba, ale pro lokální vývoj ano
             
-            openai_ws = await websockets.connect(openai_ws_url, extra_headers=headers, ssl=ssl_context)
+            # Použijeme headers - zkusíme různé způsoby podle verze websockets
+            try:
+                # Novější verze websockets (12.0+)
+                openai_ws = await websockets.connect(
+                    openai_ws_url, 
+                    extra_headers=headers, 
+                    ssl=ssl_context
+                )
+                logger.info("✅ Použita novější verze websockets s extra_headers")
+            except TypeError as e:
+                logger.info(f"extra_headers nepodporován: {e}")
+                try:
+                    # Starší verze websockets - použijeme subprotocols hack
+                    # Podle článku o WebSocket autentizaci
+                    auth_token = headers["Authorization"].replace("Bearer ", "")
+                    beta_header = headers["OpenAI-Beta"]
+                    
+                    openai_ws = await websockets.connect(
+                        openai_ws_url,
+                        ssl=ssl_context,
+                        subprotocols=[f"Authorization.{auth_token}", f"OpenAI-Beta.{beta_header}"]
+                    )
+                    logger.info("✅ Použit subprotocols hack pro autorizaci")
+                except Exception as e2:
+                    logger.error(f"Subprotocols hack selhal: {e2}")
+                    # Poslední pokus - bez SSL kontextu
+                    openai_ws = await websockets.connect(openai_ws_url)
+                    logger.info("✅ Připojení bez SSL kontextu a headers")
+            
             logger.info("✅ Připojení k OpenAI Realtime API úspěšné!")
         except websockets.exceptions.WebSocketException as e:
             logger.error(f"❌ WebSocket chyba při připojování k OpenAI: {e}")
