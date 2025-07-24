@@ -653,10 +653,12 @@ async def send_tts_to_twilio(websocket: WebSocket, text: str, stream_sid: str, c
     try:
         # Kontrola jestli je WebSocket stále připojen
         try:
-            # Pokusíme se o ping test
-            await websocket.send_text('{"event":"ping"}')
-        except Exception as ping_error:
-            logger.warning(f"WebSocket ping test failed: {ping_error}")
+            # Kontrola stavu WebSocket
+            if hasattr(websocket, 'client_state') and websocket.client_state.name != "CONNECTED":
+                logger.warning("WebSocket není v CONNECTED stavu, přeskakujem TTS")
+                return
+        except Exception as state_error:
+            logger.warning(f"WebSocket state check failed: {state_error}")
             logger.warning("WebSocket není připojen, přeskakujem TTS")
             return
             
@@ -901,6 +903,13 @@ async def audio_stream(websocket: WebSocket):
         while websocket_active:
             try:
                 logger.info("DEBUG: Čekám na WebSocket data...")
+                
+                # Kontrola stavu WebSocket před čtením
+                if hasattr(websocket, 'client_state') and websocket.client_state.name == "DISCONNECTED":
+                    logger.info("DEBUG: WebSocket je DISCONNECTED, ukončujem smyčku")
+                    websocket_active = False
+                    break
+                
                 data = await websocket.receive_text()
                 logger.info(f"DEBUG: Přijata data: {data[:100]}...")
                 
@@ -948,13 +957,21 @@ async def audio_stream(websocket: WebSocket):
             except json.JSONDecodeError as e:
                 logger.error(f"DEBUG: Neplatný JSON z Twilia: {e}")
             except RuntimeError as e:
-                logger.error(f"DEBUG: WebSocket runtime error: {e}")
+                if "Need to call \"accept\" first" in str(e):
+                    logger.error(f"DEBUG: WebSocket nebyl přijat nebo byl zavřen: {e}")
+                else:
+                    logger.error(f"DEBUG: WebSocket runtime error: {e}")
                 websocket_active = False
                 break
             except Exception as e:
                 logger.error(f"DEBUG: Chyba při zpracování zprávy: {e}")
-                websocket_active = False
-                break
+                # Zkontrolujeme jestli je to WebSocket disconnect
+                if "WebSocket" in str(e) or "disconnect" in str(e).lower():
+                    logger.info("DEBUG: Detekováno WebSocket odpojení")
+                    websocket_active = False
+                    break
+                # Jinak pokračujeme
+                continue
                     
     except Exception as e:
         logger.error(f"Chyba v Assistant API handleru: {e}")
