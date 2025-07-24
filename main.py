@@ -687,8 +687,8 @@ async def audio_stream(websocket: WebSocket):
     await websocket.accept()
     logger.info("=== AUDIO WEBSOCKET HANDLER SPUŠTĚN ===")
     
-    # Dočasně vypneme OpenAI připojení pro debugging
-    ENABLE_OPENAI = False
+    # Zapneme OpenAI připojení
+    ENABLE_OPENAI = True
     
     if not ENABLE_OPENAI:
         logger.info("🧪 DEBUG MODE: OpenAI připojení vypnuto")
@@ -781,8 +781,7 @@ async def audio_stream(websocket: WebSocket):
         return
 
     try:
-        import aiohttp
-        import ssl
+        import websockets
         
         # Správná URL a headers pro OpenAI Realtime API podle oficiální dokumentace
         openai_ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
@@ -793,96 +792,46 @@ async def audio_stream(websocket: WebSocket):
         
         logger.info("Připojuji se k OpenAI Realtime API...")
         logger.info(f"URL: {openai_ws_url}")
-        logger.info(f"Headers: {dict(headers)}")  # Pro debug
         
-        # Připojení k OpenAI Realtime API pomocí aiohttp
+        # Jednoduchý přístup - použijeme websockets bez extra_headers
+        # Headers přidáme do URL jako query parametry pro kompatibilitu
         try:
-            # SSL context
-            ssl_context = ssl.create_default_context()
+            # Zkusíme nejdříve standardní způsob
+            openai_ws = await websockets.connect(openai_ws_url)
+            logger.info("✅ Připojení k OpenAI Realtime API úspěšné (bez headers)!")
             
-            # Vytvoření aiohttp session
-            connector = aiohttp.TCPConnector(ssl=ssl_context)
-            session = aiohttp.ClientSession(
-                connector=connector,
-                headers=headers
-            )
-            
-            logger.info("Připojuji se k OpenAI Realtime API pomocí aiohttp...")
-            
-            # WebSocket připojení přes aiohttp
-            openai_ws = await session.ws_connect(openai_ws_url)
-            
-            logger.info("✅ Připojení k OpenAI Realtime API úspěšné!")
-        except Exception as e:
-            logger.error(f"❌ WebSocket chyba při připojování k OpenAI: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            try:
-                await websocket.close()
-            except:
-                pass
-            return
-        except Exception as e:
-            logger.error(f"❌ Obecná chyba při připojování k OpenAI: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            try:
-                await websocket.close()
-            except:
-                pass
-            return
-        
-        # Konfigurace session
-        session_config = {
-            "type": "session.update",
-            "session": {
-                "modalities": ["text", "audio"],
-                "instructions": """Jsi užitečný AI asistent pro výuku jazyků. Komunikuješ v češtině.
-
-Tvoje úkoly:
-- Odpovídej na otázky studentů o lekci
-- Pomáhej s vysvětlením obtížných částí
-- Buď trpělivý a povzbuzující
-- Mluv přirozeně a srozumitelně
-- Pokud student odpoví na otázku, vyhodnoť ji a poskytni zpětnou vazbu
-- Můžeš klást otázky k lekci pro ověření porozumění
-
-Vždy zůstávaj v kontextu výuky a buď konstruktivní. Odpovídej stručně a jasně.""",
-                "voice": "alloy",
-                "input_audio_format": "g711_ulaw",
-                "output_audio_format": "g711_ulaw",
-                "input_audio_transcription": {
-                    "model": "whisper-1"
-                },
-                "turn_detection": {
-                    "type": "server_vad",
-                    "threshold": 0.5,
-                    "prefix_padding_ms": 300,
-                    "silence_duration_ms": 800
-                },
-                "tools": [],
-                "tool_choice": "auto",
-                "temperature": 0.8,
-                "max_response_output_tokens": 2048
+            # Pošleme session update s autorizací
+            session_update = {
+                "type": "session.update",
+                "session": {
+                    "modalities": ["text", "audio"],
+                    "instructions": "Jste AI asistent pro výuku jazyků. Mluvte česky. Buďte přátelští a pomáhejte s učením.",
+                    "voice": "alloy",
+                    "input_audio_format": "g711_ulaw",
+                    "output_audio_format": "g711_ulaw",
+                    "input_audio_transcription": {
+                        "model": "whisper-1"
+                    },
+                    "turn_detection": {
+                        "type": "server_vad",
+                        "threshold": 0.5,
+                        "prefix_padding_ms": 300,
+                        "silence_duration_ms": 500
+                    },
+                    "tools": [],
+                    "tool_choice": "auto",
+                    "temperature": 0.8
+                }
             }
-        }
-        
-        await openai_ws.send_json(session_config)
-        logger.info("Session config odeslána do OpenAI")
-        
-        # Pošleme úvodní zprávu
-        await asyncio.sleep(1)  # Počkáme na inicializaci session
-        
-        initial_response = {
-            "type": "response.create",
-            "response": {
-                "modalities": ["text", "audio"],
-                "instructions": "Pozdrav uživatele a představ se jako AI asistent pro výuku jazyků. Řekni, že jsi připraven pomoci."
-            }
-        }
-        await openai_ws.send_json(initial_response)
-        logger.info("Úvodní response vytvořena")
-
+            
+            await openai_ws.send(json.dumps(session_update))
+            logger.info("Session update odeslána")
+            
+        except Exception as e:
+            logger.error(f"Chyba při připojování k OpenAI: {e}")
+            await websocket.close()
+            return
+            
     except Exception as e:
         logger.error(f"Chyba při připojování k OpenAI Realtime API: {e}")
         import traceback
@@ -907,7 +856,7 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní. Odpovídej stručně a
 
     async def safe_send_openai(msg):
         try:
-            await openai_ws.send_json(msg)
+            await openai_ws.send(json.dumps(msg))
         except Exception as e:
             logger.error(f"[safe_send_openai] OpenAI WebSocket není připojen: {e}")
 
@@ -915,35 +864,56 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní. Odpovídej stručně a
     async def handle_openai_messages():
         try:
             async for message in openai_ws:
-                if message.type == aiohttp.WSMsgType.TEXT:
-                    data = message.json()
-                    message_type = data.get('type', 'unknown')
+                data = json.loads(message)
+                message_type = data.get('type', 'unknown')
+                
+                logger.info(f"[OpenAI] Přijata zpráva: {message_type}")
+                
+                if message_type == 'session.created':
+                    session_id = data.get('session', {}).get('id')
+                    logger.info(f"OpenAI session vytvořena: {session_id}")
                     
-                    logger.info(f"[OpenAI] Přijata zpráva: {message_type}")
+                    # Pošleme úvodní response
+                    initial_response = {
+                        "type": "response.create",
+                        "response": {
+                            "modalities": ["text", "audio"],
+                            "instructions": "Pozdrav uživatele a představ se jako AI asistent pro výuku jazyků."
+                        }
+                    }
+                    await safe_send_openai(initial_response)
+                    logger.info("Úvodní response vytvořena")
                     
-                    if message_type == 'response.audio.delta':
-                        # Přijato audio od OpenAI
-                        audio_data = data.get('delta', '')
-                        if audio_data:
-                            # Převod z base64 na raw audio a odeslání do Twilio
-                            twilio_msg = {
-                                "event": "media",
-                                "streamSid": stream_sid,
-                                "media": {
-                                    "payload": audio_data
-                                }
+                elif message_type == 'response.audio.delta':
+                    # Přijato audio od OpenAI
+                    audio_data = data.get('delta', '')
+                    if audio_data and stream_sid:
+                        # Převod z base64 na raw audio a odeslání do Twilio
+                        twilio_msg = {
+                            "event": "media",
+                            "streamSid": stream_sid,
+                            "media": {
+                                "payload": audio_data
                             }
-                            await websocket.send_text(json.dumps(twilio_msg))
-                            
-                    elif message_type == 'response.done':
-                        logger.info("[OpenAI] Response dokončena")
+                        }
+                        await websocket.send_text(json.dumps(twilio_msg))
+                        logger.info("[OpenAI->Twilio] Audio chunk odeslán")
                         
-                    elif message_type == 'error':
-                        logger.error(f"[OpenAI] Chyba: {data.get('error', {})}")
-                        
-                elif message.type == aiohttp.WSMsgType.ERROR:
-                    logger.error(f"[OpenAI] WebSocket chyba: {openai_ws.exception()}")
-                    break
+                elif message_type == 'response.done':
+                    logger.info("[OpenAI] Response dokončena")
+                    
+                elif message_type == 'input_audio_buffer.speech_started':
+                    logger.info("OpenAI detekoval začátek řeči")
+                    
+                elif message_type == 'input_audio_buffer.speech_stopped':
+                    logger.info("OpenAI detekoval konec řeči")
+                    
+                elif message_type == 'conversation.item.input_audio_transcription.completed':
+                    transcript = data.get('transcript', '')
+                    logger.info(f"[TRANSKRIPCE] Uživatel řekl: {transcript}")
+                    
+                elif message_type == 'error':
+                    logger.error(f"[OpenAI] Chyba: {data.get('error', {})}")
                     
         except Exception as e:
             logger.error(f"[handle_openai_messages] Chyba: {e}")
@@ -1009,14 +979,14 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní. Odpovídej stručně a
         logger.error(f"Traceback: {traceback.format_exc()}")
     finally:
         # Ukončíme OpenAI task
-        if not openai_task.done():
+        if 'openai_task' in locals() and not openai_task.done():
             openai_task.cancel()
         
-        # Zavřeme OpenAI WebSocket a session
+        # Zavřeme OpenAI WebSocket
         try:
-            await openai_ws.close()
-            await session.close()
-            logger.info("OpenAI WebSocket a session uzavřeny")
+            if 'openai_ws' in locals() and not openai_ws.closed:
+                await openai_ws.close()
+            logger.info("OpenAI WebSocket uzavřen")
         except:
             pass
         
