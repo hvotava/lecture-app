@@ -1098,6 +1098,174 @@ def admin_migrate_db():
     
     return results
 
+# NOVÉ ADMIN ENDPOINTY - MUSÍ BÝT PŘED REGISTRACÍ ROUTERU
+
+@admin_router.get("/create-lesson-1", name="admin_create_lesson_1")
+def admin_create_lesson_1(request: Request):
+    """Endpoint pro vytvoření Lekce 1 - Základy obráběcích kapalin"""
+    try:
+        logger.info("🚀 Vytváření Lekce 1...")
+        
+        session = SessionLocal()
+        
+        # Zkontroluj, jestli už lekce 1 existuje
+        existing_lesson = session.query(Lesson).filter(
+            Lesson.title.contains("Lekce 1")
+        ).first()
+        
+        if existing_lesson:
+            session.close()
+            return templates.TemplateResponse("message.html", {
+                "request": request,
+                "message": f"✅ Lekce 1 již existuje! (ID: {existing_lesson.id})",
+                "back_url": "/admin/lessons",
+                "back_text": "Zpět na lekce"
+            })
+        
+        # Obsah lekce 1 - Základy obráběcích kapalin
+        lesson_script = """
+# Lekce 1: Základy obráběcích kapalin
+
+## Úvod
+Obráběcí kapaliny jsou nezbytnou součástí moderního obrábění kovů. Jejich správné použití a údržba výrazně ovlivňuje kvalitu výroby, životnost nástrojů a bezpečnost práce.
+
+## Hlavní funkce obráběcích kapalin
+
+### 1. Chlazení
+- Odvod tepla vznikajícího při řezném procesu
+- Zabránění přehřátí nástroje a obrobku
+- Udržení stálé teploty řezné hrany
+
+### 2. Mazání
+- Snížení tření mezi nástrojem a obrobkem
+- Zlepšení kvality povrchu
+- Prodloužení životnosti nástroje
+
+### 3. Odvod třísek
+- Transport třísek pryč z místa řezu
+- Zabránění zanášení nástroje
+- Udržení čistoty řezné zóny
+
+## Typy obráběcích kapalin
+
+### Řezné oleje
+- Vysoká mazací schopnost
+- Použití při těžkém obrábění
+- Nevhodné pro vysoké rychlosti
+
+### Emulze (směsi oleje a vody)
+- Kombinace mazání a chlazení
+- Nejčastěji používané
+- Koncentrace 3-8%
+
+### Syntetické kapaliny
+- Bez oleje, pouze chemické přísady
+- Výborné chladicí vlastnosti
+- Dlouhá životnost
+
+## Kontrola a údržba
+
+### Denní kontrola
+- Měření koncentrace refraktometrem
+- Kontrola pH hodnoty (8,5-9,5)
+- Vizuální kontrola čistoty
+
+### Týdenní údržba
+- Doplnění kapaliny
+- Odstranění nečistot
+- Kontrola bakteriální kontaminace
+
+### Měsíční servis
+- Výměna filtrů
+- Hloubková analýza
+- Případná regenerace
+
+## Bezpečnost
+- Používání ochranných pomůcek
+- Prevence kontaktu s kůží
+- Správné skladování a likvidace
+
+## Závěr
+Správná práce s obráběcími kapalinami je základem efektivního obrábění. Pravidelná kontrola a údržba zajišťuje optimální výkon a bezpečnost provozu.
+        """
+        
+        # Vytvoř lekci 1
+        lesson = Lesson(
+            title="Lekce 1: Základy obráběcích kapalin",
+            description="Komplexní úvod do problematiky obráběcích kapalin - funkce, typy, kontrola a údržba.",
+            language="cs",
+            script=lesson_script,
+            questions=[],  # Otázky se budou generovat dynamicky
+            level="beginner"
+        )
+        
+        session.add(lesson)
+        session.commit()
+        lesson_id = lesson.id
+        session.close()
+        
+        logger.info(f"✅ Lekce 1 vytvořena s ID: {lesson_id}")
+        
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"🎉 Lekce 1 úspěšně vytvořena!\n\n📝 ID: {lesson_id}\n📚 Obsah: Základy obráběcích kapalin\n🎯 Úroveň: Začátečník\n\n⚡ Otázky se generují automaticky při testování!",
+            "back_url": "/admin/lessons",
+            "back_text": "Zobrazit všechny lekce"
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Chyba při vytváření Lekce 1: {e}")
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"❌ Chyba při vytváření Lekce 1: {str(e)}",
+            "back_url": "/admin/lessons",
+            "back_text": "Zpět na lekce"
+        })
+
+@admin_router.get("/user-progress", response_class=HTMLResponse, name="admin_user_progress")
+def admin_user_progress(request: Request):
+    """Zobrazí pokrok všech uživatelů"""
+    session = SessionLocal()
+    try:
+        users = session.query(User).all()
+        
+        # Připrav data o pokroku
+        progress_data = []
+        for user in users:
+            user_level = getattr(user, 'current_lesson_level', 0)
+            
+            # Najdi název aktuální lekce
+            current_lesson_name = "Vstupní test"
+            if user_level == 1:
+                current_lesson_name = "Lekce 1: Základy"
+            elif user_level > 1:
+                current_lesson_name = f"Lekce {user_level}"
+            
+            progress_data.append({
+                'user': user,
+                'level': user_level,
+                'lesson_name': current_lesson_name,
+                'attempts_count': len(user.attempts) if hasattr(user, 'attempts') else 0
+            })
+        
+        session.close()
+        return templates.TemplateResponse("admin/user_progress.html", {
+            "request": request, 
+            "progress_data": progress_data
+        })
+        
+    except Exception as e:
+        session.close()
+        logger.error(f"❌ Chyba při načítání pokroku: {e}")
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"❌ Chyba při načítání pokroku uživatelů: {str(e)}",
+            "back_url": "/admin/users",
+            "back_text": "Zpět na uživatele"
+        })
+
+
+
 # Připojení admin routeru
 app.include_router(admin_router)
 
