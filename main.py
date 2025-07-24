@@ -636,6 +636,130 @@ async def wav_to_mulaw(audio_data: bytes) -> bytes:
         logger.error(f"Chyba při převodu WAV na μ-law: {e}")
         return b""
 
+async def send_tts_to_twilio(websocket: WebSocket, text: str, stream_sid: str, client):
+    """Převede text na audio a pošle do Twilio"""
+    try:
+        logger.info(f"🎤 TTS: {text[:50]}...")
+        
+        # OpenAI TTS
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=text,
+            response_format="wav"
+        )
+        
+        # Převod na G.711 μ-law pro Twilio
+        audio_data = response.content
+        
+        # Zde by měla být konverze na G.711, ale pro jednoduchost použijeme base64
+        import base64
+        audio_b64 = base64.b64encode(audio_data).decode()
+        
+        # Rozdělíme na chunky a pošleme
+        chunk_size = 1000  # Base64 chunky
+        for i in range(0, len(audio_b64), chunk_size):
+            chunk = audio_b64[i:i+chunk_size]
+            
+            media_message = {
+                "event": "media",
+                "streamSid": stream_sid,
+                "media": {
+                    "payload": chunk
+                }
+            }
+            
+            if stream_sid:  # Pouze pokud máme stream_sid
+                await websocket.send_text(json.dumps(media_message))
+                await asyncio.sleep(0.05)  # 50ms mezi chunky
+        
+        logger.info("✅ TTS audio odesláno")
+        
+    except Exception as e:
+        logger.error(f"Chyba při TTS: {e}")
+
+async def process_audio_with_assistant(websocket: WebSocket, audio_buffer: bytearray, 
+                                     stream_sid: str, client, assistant_id: str, thread_id: str):
+    """Zpracuje audio pomocí OpenAI Assistant API"""
+    try:
+        logger.info(f"🎧 Zpracovávám audio buffer ({len(audio_buffer)} bajtů)")
+        
+        # Uložíme audio do dočasného souboru
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+            tmp_file.write(audio_buffer)
+            tmp_file_path = tmp_file.name
+        
+        try:
+            # OpenAI Whisper pro STT
+            with open(tmp_file_path, "rb") as audio_file:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="cs"
+                )
+            
+            user_text = transcript.text
+            logger.info(f"📝 Transkripce: {user_text}")
+            
+            if not user_text.strip():
+                logger.info("Prázdná transkripce, ignoruji")
+                return
+            
+            # Přidáme zprávu do threadu
+            client.beta.threads.messages.create(
+                thread_id=thread_id,
+                role="user",
+                content=user_text
+            )
+            
+            # Spustíme asistenta
+            run = client.beta.threads.runs.create(
+                thread_id=thread_id,
+                assistant_id=assistant_id
+            )
+            
+            # Čekáme na dokončení
+            import time
+            max_wait = 30  # 30 sekund timeout
+            start_time = time.time()
+            
+            while run.status in ["queued", "in_progress"] and (time.time() - start_time) < max_wait:
+                await asyncio.sleep(1)
+                run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+            
+            if run.status == "completed":
+                # Získáme odpověď
+                messages = client.beta.threads.messages.list(thread_id=thread_id)
+                
+                for message in messages.data:
+                    if message.role == "assistant":
+                        for content in message.content:
+                            if content.type == "text":
+                                assistant_response = content.text.value
+                                logger.info(f"🤖 Assistant odpověď: {assistant_response}")
+                                
+                                # Pošleme jako TTS
+                                await send_tts_to_twilio(websocket, assistant_response, stream_sid, client)
+                                return
+            else:
+                logger.error(f"Assistant run failed: {run.status}")
+                await send_tts_to_twilio(websocket, "Omlouvám se, nastala chyba při zpracování.", stream_sid, client)
+                
+        finally:
+            # Vyčistíme dočasný soubor
+            import os
+            try:
+                os.unlink(tmp_file_path)
+            except:
+                pass
+                
+    except Exception as e:
+        logger.error(f"Chyba při zpracování audio: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        await send_tts_to_twilio(websocket, "Omlouvám se, nerozuměl jsem.", stream_sid, client)
+
 @app.websocket("/audio-test")
 async def audio_stream_test(websocket: WebSocket):
     """Jednoduchý test WebSocket handler bez OpenAI připojení"""
@@ -683,19 +807,42 @@ async def audio_stream_test(websocket: WebSocket):
 
 @app.websocket("/audio")
 async def audio_stream(websocket: WebSocket):
-    """AI hlasový asistent s OpenAI Realtime API - DEBUGGING VERZE"""
+    """AI hlasový asistent s OpenAI Assistant API (hybridní řešení)"""
     await websocket.accept()
     logger.info("=== AUDIO WEBSOCKET HANDLER SPUŠTĚN ===")
     
-    # Zapneme OpenAI připojení
-    ENABLE_OPENAI = True
+    # Použijeme hybridní přístup: STT → Assistant API → TTS
+    USE_ASSISTANT_API = True
     
-    if not ENABLE_OPENAI:
-        logger.info("🧪 DEBUG MODE: OpenAI připojení vypnuto")
+    if USE_ASSISTANT_API:
+        logger.info("🤖 Používám OpenAI Assistant API (hybridní řešení)")
         
-        # Jednoduchý test handler
+        # Inicializace OpenAI klienta
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not openai_api_key:
+            logger.error("OPENAI_API_KEY není nastaven")
+            await websocket.close()
+            return
+            
+        import openai
+        client = openai.OpenAI(api_key=openai_api_key)
+        
+        # Váš Assistant ID
+        assistant_id = "asst_W6120kPP1lLBzU5OQLYvH6W1"
+        thread = None
+        
         try:
+            # Vytvoříme nový thread pro konverzaci
+            thread = client.beta.threads.create()
+            logger.info(f"✅ Thread vytvořen: {thread.id}")
+            
             stream_sid = None
+            audio_buffer = bytearray()
+            
+            # Úvodní zpráva
+            await asyncio.sleep(1)
+            initial_message = "Ahoj! Jsem AI asistent pro výuku jazyků. Jak vám mohu pomoci?"
+            await send_tts_to_twilio(websocket, initial_message, stream_sid, client)
             
             while True:
                 data = await websocket.receive_text()
@@ -708,54 +855,24 @@ async def audio_stream(websocket: WebSocket):
                         stream_sid = msg.get("streamSid")
                         logger.info(f"Stream SID: {stream_sid}")
                         
-                        # Pošleme test audio zprávu
-                        await asyncio.sleep(1)  # Krátká pauza
-                        
-                        # Simulace TTS odpovědi
-                        test_message = "Ahoj! Jsem AI asistent. Slyšíte mě?"
-                        logger.info(f"🎤 Odesílám test zprávu: {test_message}")
-                        
-                        # Vytvoříme falešný audio payload (ticho)
-                        import base64
-                        silence_audio = b'\x00' * 160  # 160 bajtů ticha pro G.711 μ-law
-                        silence_b64 = base64.b64encode(silence_audio).decode()
-                        
-                        # Pošleme několik audio chunků
-                        for i in range(10):
-                            media_message = {
-                                "event": "media",
-                                "streamSid": stream_sid,
-                                "media": {
-                                    "payload": silence_b64
-                                }
-                            }
-                            await websocket.send_text(json.dumps(media_message))
-                            await asyncio.sleep(0.1)  # 100ms mezi chunky
-                        
-                        logger.info("✅ Test audio chunky odeslány")
-                        
                     elif event == "media":
                         payload = msg["media"]["payload"]
                         track = msg["media"]["track"]
-                        seq = msg.get("sequenceNumber", "?")
                         
                         if track == "inbound":
-                            logger.info(f"📥 Přijat audio chunk #{seq} od uživatele (délka: {len(payload)})")
+                            # Shromažďujeme audio data
+                            audio_data = base64.b64decode(payload)
+                            audio_buffer.extend(audio_data)
                             
-                            # Simulace zpracování - echo odpověď
-                            if int(seq) % 50 == 0:  # Každý 50. chunk
-                                echo_message = {
-                                    "event": "media", 
-                                    "streamSid": stream_sid,
-                                    "media": {
-                                        "payload": payload  # Echo stejného audia zpět
-                                    }
-                                }
-                                await websocket.send_text(json.dumps(echo_message))
-                                logger.info(f"🔄 Echo odpověď odeslána pro chunk #{seq}")
-                        
                     elif event == "stop":
                         logger.info("Media Stream ukončen")
+                        
+                        if audio_buffer:
+                            # Zpracujeme nashromážděné audio
+                            await process_audio_with_assistant(
+                                websocket, audio_buffer, stream_sid, 
+                                client, assistant_id, thread.id
+                            )
                         break
                         
                 except json.JSONDecodeError as e:
@@ -763,17 +880,24 @@ async def audio_stream(websocket: WebSocket):
                 except Exception as e:
                     logger.error(f"Chyba při zpracování zprávy: {e}")
                     
-        except WebSocketDisconnect:
-            logger.info("WebSocket /audio odpojen")
         except Exception as e:
-            logger.error(f"Chyba ve WebSocket /audio: {e}")
+            logger.error(f"Chyba v Assistant API handleru: {e}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
         finally:
+            # Vyčistíme thread
+            if thread:
+                try:
+                    client.beta.threads.delete(thread.id)
+                    logger.info(f"Thread {thread.id} smazán")
+                except:
+                    pass
+            
             logger.info("=== AUDIO WEBSOCKET HANDLER UKONČEN ===")
             return
     
-    # Původní kód s OpenAI (zatím vypnutý)
+    # Původní Realtime API kód (backup)
+    logger.info("🔄 Fallback na Realtime API...")
     openai_api_key = os.getenv('OPENAI_API_KEY')
     if not openai_api_key:
         logger.error("OPENAI_API_KEY není nastavena")
