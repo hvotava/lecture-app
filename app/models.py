@@ -13,7 +13,7 @@ class User(Base):
     level = mapped_column(String(20), nullable=True, default="beginner")
     language = mapped_column(String(2), nullable=True, default="cs")
     detail = mapped_column(Text, nullable=True)
-    # current_lesson_level = mapped_column(Integer, nullable=False, default=0)  # DOČASNĚ VYPNUTO
+    current_lesson_level = mapped_column(Integer, nullable=False, default=0)  # OBNOVENO
     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     attempts = relationship("Attempt", back_populates="user")
     # progress = relationship("UserProgress", back_populates="user")  # DOČASNĚ VYPNUTO

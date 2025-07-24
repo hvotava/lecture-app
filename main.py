@@ -1263,7 +1263,7 @@ async def voice_handler(request: Request):
 
 @app.post("/voice/process")
 async def process_speech(request: Request):
-    """Zpracuje hlasový vstup od uživatele"""
+    """Zpracuje hlasový vstup od uživatele s inteligentním systémem lekcí"""
     logger.info("Přijat hlasový vstup od uživatele")
     
     form = await request.form()
@@ -1275,7 +1275,6 @@ async def process_speech(request: Request):
     response = VoiceResponse()
     
     if speech_result:
-        # OpenAI GPT odpověď s vyhodnocením
         try:
             openai_api_key = os.getenv('OPENAI_API_KEY')
             if openai_api_key:
@@ -1284,177 +1283,227 @@ async def process_speech(request: Request):
                 
                 logger.info("🤖 Generuji odpověď pomocí OpenAI GPT...")
                 
-                # Získej attempt_id z query parametrů pro načtení správné lekce
+                # Získej attempt_id z query parametrů
                 attempt_id = request.query_params.get('attempt_id')
                 current_lesson = None
-                enabled_questions = []
+                current_user = None
+                lesson_content = ""
                 
-                if attempt_id:
-                    try:
-                        session = SessionLocal()
-                        attempt = session.query(Attempt).get(int(attempt_id))
-                        if attempt and attempt.lesson:
-                            current_lesson = attempt.lesson
-                            
-                            # Filtruj pouze ENABLED otázky
-                            if (current_lesson.questions and 
-                                isinstance(current_lesson.questions, list)):
-                                enabled_questions = [
-                                    q for q in current_lesson.questions 
-                                    if isinstance(q, dict) and q.get('enabled', True)
-                                ]
-                                logger.info(f"🎯 Nalezeno {len(enabled_questions)} aktivních otázek z {len(current_lesson.questions)} celkem")
-                            else:
-                                logger.warning("⚠️ Lekce nemá otázky nebo jsou v nesprávném formátu")
-                        session.close()
-                    except Exception as e:
-                        logger.error(f"❌ Chyba při načítání lekce: {e}")
-                        if 'session' in locals():
-                            session.close()
-                
-                # Vyber náhodnou otázku z ENABLED otázek pro kontext
-                question_context = ""
-                if enabled_questions:
-                    import random
-                    random_question = random.choice(enabled_questions)
-                    question_context = f"""
-                    
-AKTUÁLNÍ TESTOVACÍ OTÁZKA (pro kontext):
-Otázka: {random_question.get('question', '')}
-Správná odpověď: {random_question.get('correct_answer', '')}
-Klíčová slova: {', '.join(random_question.get('keywords', []))}
-                    """
-                
-                # Rozšířený prompt pro vyhodnocení odpovědí
-                system_prompt = f"""Jsi AI asistent pro výuku obráběcích kapalin a servisu. Komunikuješ POUZE v češtině.
-
-🎯 DŮLEŽITÉ: VŽDY MUSÍŠ PŘIDAT SKÓRE NA KONEC!
-
-INSTRUKCE PRO VYHODNOCENÍ:
-1. Vyhodnoť správnost odpovědi studenta (0-100%)
-2. Poskytni krátkou zpětnou vazbu (max 2 věty)
-3. Na konci odpovědi POVINNĚ přidej skóre ve formátu: [SKÓRE: XX%]
-
-TESTOVACÍ DATABÁZE ({len(enabled_questions)} aktivních otázek):
-Používáš pouze otázky označené jako "enabled" v lekci. Celkem máš k dispozici {len(enabled_questions)} aktivních otázek z oboru obráběcích kapalin.
-
-{question_context}
-
-PŘÍKLADY ODPOVĚDÍ:
-- "Výborně! Obráběcí kapaliny skutečně slouží k chlazení a mazání. [SKÓRE: 95%]"
-- "Částečně správně. Zapomněl jste na funkci odvodu třísek. [SKÓRE: 60%]"
-- "To není správné. Obráběcí kapaliny mají více funkcí než jen čištění. [SKÓRE: 25%]"
-
-⚠️ KRITICKÉ: Bez [SKÓRE: XX%] na konci se systém pokazí!"""
-
-                # Připrav kontext pro GPT s informacemi o enabled otázkách
-                user_prompt = f"Student odpověděl: '{speech_result}'. Vyhodnoť jeho odpověď a poskytni zpětnou vazbu."
-                
-                if enabled_questions:
-                    # Přidej informace o všech enabled otázkách pro lepší kontext
-                    questions_info = "\n".join([
-                        f"- {q.get('question', '')} (správná odpověď: {q.get('correct_answer', '')})"
-                        for q in enabled_questions[:5]  # Omez na prvních 5 pro úsporu tokenů
-                    ])
-                    user_prompt += f"\n\nKONTEXT - Aktivní otázky v této lekci:\n{questions_info}"
-
-                gpt_response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    max_tokens=150,
-                    temperature=0.7
-                )
-                
-                ai_answer = gpt_response.choices[0].message.content
-                logger.info(f"🤖 OpenAI odpověď ÚSPĚŠNĚ přijata: {ai_answer}")
-                
-                # Extrakce skóre z odpovědi
-                import re
-                score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
-                current_score = int(score_match.group(1)) if score_match else 0
-                
-                logger.info(f"📊 Extrahované skóre: {current_score}% (match: {score_match})")
-                
-                # Odstranění skóre z odpovědi pro TTS
-                clean_answer = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
-                
-                logger.info(f"🔊 Čistá odpověď pro TTS: '{clean_answer}'")
-                
-                # Kontrola postupu do další lekce (simulace - v reálné aplikaci by se načetl attempt_id)
                 session = SessionLocal()
                 try:
-                    # Pro demo - najdi posledního uživatele (v reálné aplikaci by se použil attempt_id)
-                    user = session.query(User).order_by(User.id.desc()).first()
-                    logger.info(f"👤 Načten uživatel: {user.name if user else 'None'}, aktuální lekce: {user.current_lesson_level if user else 'N/A'}")
+                    if attempt_id:
+                        attempt = session.query(Attempt).get(int(attempt_id))
+                        if attempt:
+                            current_lesson = attempt.lesson
+                            current_user = attempt.user
+                            logger.info(f"👤 Uživatel: {current_user.name}, Lekce: {current_lesson.title}")
                     
-                    # Informace o enabled otázkách pro uživatele
-                    enabled_info = f" (testováno z {len(enabled_questions)} aktivních otázek)" if enabled_questions else ""
+                    # Pokud není attempt, najdi posledního uživatele
+                    if not current_user:
+                        current_user = session.query(User).order_by(User.id.desc()).first()
                     
-                    if user and current_score >= 90 and user.current_lesson_level == 0:
-                        # Postup z vstupního testu do lekce 1
-                        user.current_lesson_level = 1
+                    if not current_user:
+                        logger.error("❌ Žádný uživatel nenalezen!")
+                        session.close()
+                        response.say("Omlouvám se, došlo k technické chybě.", language="cs-CZ")
+                        response.hangup()
+                        return Response(content=str(response), media_type="text/xml")
+                    
+                    # INTELIGENTNÍ VÝBĚR LEKCE PODLE POKROKU UŽIVATELE
+                    user_level = getattr(current_user, 'current_lesson_level', 0)
+                    logger.info(f"🎯 Uživatel je na úrovni: {user_level}")
+                    
+                    # Najdi správnou lekci podle úrovně uživatele
+                    if user_level == 0:
+                        # Vstupní test - Lekce 0
+                        target_lesson = session.query(Lesson).filter(
+                            Lesson.title.contains("Lekce 0")
+                        ).first()
                         
-                        # Vytvoř progress záznam
-                        from app.models import UserProgress
-                        progress = UserProgress(
-                            user_id=user.id,
-                            lesson_number=0,  # Dokončena lekce 0
-                            is_completed=True,
-                            best_score=float(current_score),
-                            attempts_count=1,
-                            first_completed_at=datetime.now()
-                        )
-                        session.add(progress)
-                        session.commit()
+                        if target_lesson and target_lesson.questions:
+                            # VSTUPNÍ TEST - konkrétní otázky
+                            enabled_questions = []
+                            if isinstance(target_lesson.questions, list):
+                                enabled_questions = [
+                                    q for q in target_lesson.questions 
+                                    if isinstance(q, dict) and q.get('enabled', True)
+                                ]
+                            
+                            if enabled_questions:
+                                # Vyber náhodnou otázku pro testování
+                                import random
+                                test_question = random.choice(enabled_questions)
+                                
+                                system_prompt = f"""Jsi AI examinátor pro vstupní test z obráběcích kapalin a servisu.
+
+TESTOVACÍ OTÁZKA:
+{test_question.get('question', '')}
+
+SPRÁVNÁ ODPOVĚĎ:
+{test_question.get('correct_answer', '')}
+
+KLÍČOVÁ SLOVA:
+{', '.join(test_question.get('keywords', []))}
+
+INSTRUKCE:
+1. Porovnej odpověď studenta se správnou odpovědí
+2. Vyhodnoť na škále 0-100%
+3. Poskytni krátkou zpětnou vazbu
+4. POVINNĚ přidej na konec: [SKÓRE: XX%]
+
+PŘÍKLAD: "Správně! Obráběcí kapaliny skutečně slouží k chlazení a mazání. [SKÓRE: 90%]"
+
+Student odpověděl: "{speech_result}"
+Vyhodnoť jeho odpověď."""
+
+                                gpt_response = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[
+                                        {"role": "system", "content": system_prompt}
+                                    ],
+                                    max_tokens=150,
+                                    temperature=0.3
+                                )
+                                
+                                ai_answer = gpt_response.choices[0].message.content
+                                
+                                # Extrakce skóre
+                                import re
+                                score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
+                                current_score = int(score_match.group(1)) if score_match else 0
+                                clean_answer = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
+                                
+                                logger.info(f"📊 Vstupní test skóre: {current_score}%")
+                                
+                                # Kontrola postupu do Lekce 1
+                                if current_score >= 90:
+                                    current_user.current_lesson_level = 1
+                                    session.commit()
+                                    clean_answer += f" Gratulujeme! Dosáhli jste {current_score}% a postoupili do Lekce 1!"
+                                    logger.info(f"🎉 Uživatel postoupil do Lekce 1")
+                                else:
+                                    clean_answer += f" Dosáhli jste {current_score}%. Pro postup potřebujete alespoň 90%. Zkuste to znovu!"
+                                
+                                response.say(clean_answer, language="cs-CZ", rate="0.9")
+                            else:
+                                response.say("Vstupní test není připraven. Kontaktujte administrátora.", language="cs-CZ")
+                        else:
+                            response.say("Vstupní test nebyl nalezen. Kontaktujte administrátora.", language="cs-CZ")
+                    
+                    elif user_level >= 1:
+                        # ŠKOLNÍ LEKCE - najdi lekci podle úrovně
+                        target_lesson = session.query(Lesson).filter(
+                            Lesson.level == "beginner"
+                        ).first()
                         
-                        logger.info(f"🎉 Uživatel {user.name} postoupil do lekce 1 se skóre {current_score}% ({len(enabled_questions)} aktivních otázek)")
-                        
-                        # Přidej gratulaci do odpovědi
-                        clean_answer += f" Gratulujeme! Dosáhli jste {current_score}%{enabled_info} a postoupili do Lekce 1!"
-                        
-                    elif user and current_score < 90 and user.current_lesson_level == 0:
-                        clean_answer += f" Dosáhli jste {current_score}%{enabled_info}. Pro postup potřebujete alespoň 90%. Zkuste to znovu!"
-                        logger.info(f"📊 Uživatel {user.name} nedosáhl 90%, zůstává na lekci 0 ({len(enabled_questions)} aktivních otázek)")
-                        
+                        if target_lesson and target_lesson.script:
+                            lesson_content = target_lesson.script
+                            
+                            # AUTOMATICKÉ GENEROVÁNÍ OTÁZEK Z OBSAHU LEKCE
+                            from app.services.openai_service import OpenAIService
+                            openai_service = OpenAIService()
+                            
+                            # Generuj 10 náhodných otázek z obsahu lekce
+                            generated_questions = openai_service.generate_questions_from_lesson(
+                                lesson_script=lesson_content,
+                                language="cs",
+                                num_questions=10
+                            )
+                            
+                            if generated_questions:
+                                # Vyber náhodnou otázku pro testování
+                                import random
+                                test_question = random.choice(generated_questions)
+                                
+                                system_prompt = f"""Jsi AI učitel pro lekci: {target_lesson.title}
+
+OBSAH LEKCE:
+{lesson_content[:500]}...
+
+TESTOVACÍ OTÁZKA:
+{test_question.get('question', '')}
+
+SPRÁVNÁ ODPOVĚĎ:
+{test_question.get('correct_answer', '')}
+
+INSTRUKCE:
+1. Vyhodnoť odpověď studenta podle obsahu lekce
+2. Porovnej se správnou odpovědí
+3. Poskytni konstruktivní zpětnou vazbu
+4. POVINNĚ přidej skóre: [SKÓRE: XX%]
+
+Student odpověděl: "{speech_result}"
+Vyhodnoť jeho odpověď podle lekce."""
+
+                                gpt_response = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[
+                                        {"role": "system", "content": system_prompt}
+                                    ],
+                                    max_tokens=200,
+                                    temperature=0.4
+                                )
+                                
+                                ai_answer = gpt_response.choices[0].message.content
+                                
+                                # Extrakce skóre
+                                import re
+                                score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
+                                current_score = int(score_match.group(1)) if score_match else 0
+                                clean_answer = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
+                                
+                                logger.info(f"📊 Lekce {user_level} skóre: {current_score}%")
+                                
+                                # Kontrola postupu do další lekce
+                                if current_score >= 90:
+                                    current_user.current_lesson_level = user_level + 1
+                                    session.commit()
+                                    clean_answer += f" Výborně! Dosáhli jste {current_score}% a postoupili do další lekce!"
+                                    logger.info(f"🎉 Uživatel postoupil do lekce {user_level + 1}")
+                                else:
+                                    clean_answer += f" Dosáhli jste {current_score}%. Pro postup potřebujete alespoň 90%."
+                                
+                                response.say(clean_answer, language="cs-CZ", rate="0.9")
+                            else:
+                                # Fallback - obecná konverzace o lekci
+                                system_prompt = f"""Jsi AI učitel. Odpovídej na otázky o této lekci:
+
+{lesson_content}
+
+Student se zeptal: "{speech_result}"
+Odpověz mu jasně a srozumitelně v češtině."""
+
+                                gpt_response = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[
+                                        {"role": "system", "content": system_prompt}
+                                    ],
+                                    max_tokens=150,
+                                    temperature=0.7
+                                )
+                                
+                                ai_answer = gpt_response.choices[0].message.content
+                                response.say(ai_answer, language="cs-CZ", rate="0.9")
+                        else:
+                            response.say("Lekce pro vaši úroveň nebyla nalezena. Kontaktujte administrátora.", language="cs-CZ")
+                    
                 except Exception as db_error:
-                    logger.error(f"❌ Chyba při aktualizaci pokroku: {db_error}")
-                    import traceback
-                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    logger.error(f"❌ Chyba při práci s databází: {db_error}")
+                    response.say("Došlo k technické chybě. Zkuste to prosím později.", language="cs-CZ")
                 finally:
                     session.close()
-                
-                logger.info(f"🎤 Finální odpověď pro TTS: '{clean_answer}'")
-                
-                response.say(
-                    clean_answer,
-                    language="cs-CZ",
-                    rate="0.9",
-                    voice="Google.cs-CZ-Standard-A"
-                )
             else:
                 logger.warning("⚠️ OPENAI_API_KEY není nastaven")
-                response.say(
-                    f"Rozuměl jsem vám. Řekl jste: {speech_result}. OpenAI není nakonfigurováno.",
-                    language="cs-CZ",
-                    rate="0.9",
-                    voice="Google.cs-CZ-Standard-A"
-                )
+                response.say("AI služba není dostupná.", language="cs-CZ")
+        
         except Exception as e:
-            logger.error(f"❌ Chyba při volání OpenAI: {e}")
-            response.say(
-                f"Rozuměl jsem vám. Řekl jste: {speech_result}. Omlouvám se, došlo k technické chybě.",
-                language="cs-CZ",
-                rate="0.9",
-                voice="Google.cs-CZ-Standard-A"
-            )
+            logger.error(f"❌ Chyba při zpracování: {e}")
+            response.say("Došlo k neočekávané chybě.", language="cs-CZ")
         
         # Další kolo konverzace
         gather = response.gather(
             input='speech',
-            timeout=15,  # Delší timeout pro pohodlnější konverzaci
+            timeout=15,
             action='/voice/process',
             method='POST',
             language='cs-CZ',
@@ -1464,28 +1513,22 @@ PŘÍKLADY ODPOVĚDÍ:
         gather.say(
             "Máte další otázku nebo chcete pokračovat?",
             language="cs-CZ",
-            rate="0.9",
-            voice="Google.cs-CZ-Standard-A"
+            rate="0.9"
         )
         
-        # Fallback pro timeout
         response.say(
-            "Děkuji za rozhovor. Hovor ukončuji. Na shledanou!",
+            "Děkuji za rozhovor. Na shledanou!",
             language="cs-CZ",
-            rate="0.9",
-            voice="Google.cs-CZ-Standard-A"
+            rate="0.9"
         )
     else:
         response.say(
-            "Omlouvám se, nerozuměl jsem vám. Hovor ukončuji.",
+            "Nerozuměl jsem vám. Hovor ukončuji.",
             language="cs-CZ",
-            rate="0.9",
-            voice="Google.cs-CZ-Standard-A"
+            rate="0.9"
         )
     
     response.hangup()
-    
-    logger.info(f"Odpověď na hlasový vstup: {response}")
     return Response(content=str(response), media_type="text/xml")
 
 @app.post("/voice/start-stream/")
@@ -2296,3 +2339,167 @@ async def generate_tts(request: Request):
     except Exception as e:
         logger.error(f"Chyba při TTS: {e}")
         return {"error": str(e)} 
+
+@admin_router.get("/create-lesson-1", name="admin_create_lesson_1")
+def admin_create_lesson_1(request: Request):
+    """Endpoint pro vytvoření Lekce 1 - Základy obráběcích kapalin"""
+    try:
+        logger.info("🚀 Vytváření Lekce 1...")
+        
+        session = SessionLocal()
+        
+        # Zkontroluj, jestli už lekce 1 existuje
+        existing_lesson = session.query(Lesson).filter(
+            Lesson.title.contains("Lekce 1")
+        ).first()
+        
+        if existing_lesson:
+            session.close()
+            return templates.TemplateResponse("message.html", {
+                "request": request,
+                "message": f"✅ Lekce 1 již existuje! (ID: {existing_lesson.id})",
+                "back_url": "/admin/lessons",
+                "back_text": "Zpět na lekce"
+            })
+        
+        # Obsah lekce 1 - Základy obráběcích kapalin
+        lesson_script = """
+# Lekce 1: Základy obráběcích kapalin
+
+## Úvod
+Obráběcí kapaliny jsou nezbytnou součástí moderního obrábění kovů. Jejich správné použití a údržba výrazně ovlivňuje kvalitu výroby, životnost nástrojů a bezpečnost práce.
+
+## Hlavní funkce obráběcích kapalin
+
+### 1. Chlazení
+- Odvod tepla vznikajícího při řezném procesu
+- Zabránění přehřátí nástroje a obrobku
+- Udržení stálé teploty řezné hrany
+
+### 2. Mazání
+- Snížení tření mezi nástrojem a obrobkem
+- Zlepšení kvality povrchu
+- Prodloužení životnosti nástroje
+
+### 3. Odvod třísek
+- Transport třísek pryč z místa řezu
+- Zabránění zanášení nástroje
+- Udržení čistoty řezné zóny
+
+## Typy obráběcích kapalin
+
+### Řezné oleje
+- Vysoká mazací schopnost
+- Použití při těžkém obrábění
+- Nevhodné pro vysoké rychlosti
+
+### Emulze (směsi oleje a vody)
+- Kombinace mazání a chlazení
+- Nejčastěji používané
+- Koncentrace 3-8%
+
+### Syntetické kapaliny
+- Bez oleje, pouze chemické přísady
+- Výborné chladicí vlastnosti
+- Dlouhá životnost
+
+## Kontrola a údržba
+
+### Denní kontrola
+- Měření koncentrace refraktometrem
+- Kontrola pH hodnoty (8,5-9,5)
+- Vizuální kontrola čistoty
+
+### Týdenní údržba
+- Doplnění kapaliny
+- Odstranění nečistot
+- Kontrola bakteriální kontaminace
+
+### Měsíční servis
+- Výměna filtrů
+- Hloubková analýza
+- Případná regenerace
+
+## Bezpečnost
+- Používání ochranných pomůcek
+- Prevence kontaktu s kůží
+- Správné skladování a likvidace
+
+## Závěr
+Správná práce s obráběcími kapalinami je základem efektivního obrábění. Pravidelná kontrola a údržba zajišťuje optimální výkon a bezpečnost provozu.
+        """
+        
+        # Vytvoř lekci 1
+        lesson = Lesson(
+            title="Lekce 1: Základy obráběcích kapalin",
+            description="Komplexní úvod do problematiky obráběcích kapalin - funkce, typy, kontrola a údržba.",
+            language="cs",
+            script=lesson_script,
+            questions=[],  # Otázky se budou generovat dynamicky
+            level="beginner"
+        )
+        
+        session.add(lesson)
+        session.commit()
+        lesson_id = lesson.id
+        session.close()
+        
+        logger.info(f"✅ Lekce 1 vytvořena s ID: {lesson_id}")
+        
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"🎉 Lekce 1 úspěšně vytvořena!\n\n📝 ID: {lesson_id}\n📚 Obsah: Základy obráběcích kapalin\n🎯 Úroveň: Začátečník\n\n⚡ Otázky se generují automaticky při testování!",
+            "back_url": "/admin/lessons",
+            "back_text": "Zobrazit všechny lekce"
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Chyba při vytváření Lekce 1: {e}")
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"❌ Chyba při vytváření Lekce 1: {str(e)}",
+            "back_url": "/admin/lessons",
+            "back_text": "Zpět na lekce"
+        })
+
+@admin_router.get("/user-progress", response_class=HTMLResponse, name="admin_user_progress")
+def admin_user_progress(request: Request):
+    """Zobrazí pokrok všech uživatelů"""
+    session = SessionLocal()
+    try:
+        users = session.query(User).all()
+        
+        # Připrav data o pokroku
+        progress_data = []
+        for user in users:
+            user_level = getattr(user, 'current_lesson_level', 0)
+            
+            # Najdi název aktuální lekce
+            current_lesson_name = "Vstupní test"
+            if user_level == 1:
+                current_lesson_name = "Lekce 1: Základy"
+            elif user_level > 1:
+                current_lesson_name = f"Lekce {user_level}"
+            
+            progress_data.append({
+                'user': user,
+                'level': user_level,
+                'lesson_name': current_lesson_name,
+                'attempts_count': len(user.attempts) if hasattr(user, 'attempts') else 0
+            })
+        
+        session.close()
+        return templates.TemplateResponse("admin/user_progress.html", {
+            "request": request, 
+            "progress_data": progress_data
+        })
+        
+    except Exception as e:
+        session.close()
+        logger.error(f"❌ Chyba při načítání pokroku: {e}")
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"❌ Chyba při načítání pokroku uživatelů: {str(e)}",
+            "back_url": "/admin/users",
+            "back_text": "Zpět na uživatele"
+        })
