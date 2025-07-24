@@ -975,25 +975,32 @@ Vždy zůstávej v roli učitele jazyků a komunikuj pouze v češtině.""",
         # Hlavní smyčka pro zpracování WebSocket zpráv
         while websocket_active:
             try:
-                logger.info("DEBUG: Čekám na WebSocket data...")
+                logger.info("🔄 DEBUG: Čekám na WebSocket data...")
                 
                 # Kontrola stavu WebSocket před čtením
                 try:
                     # Pokusíme se o rychlý ping test
                     await websocket.ping()
-                    logger.debug("DEBUG: WebSocket ping OK")
+                    logger.info("✅ DEBUG: WebSocket ping OK")
                 except Exception as ping_error:
-                    logger.info(f"DEBUG: WebSocket ping failed: {ping_error}")
+                    logger.info(f"❌ DEBUG: WebSocket ping failed: {ping_error}")
                     logger.info("DEBUG: WebSocket je pravděpodobně zavřen, ukončujem smyčku")
                     websocket_active = False
                     break
                 
+                logger.info("📥 DEBUG: Volám websocket.receive_text()...")
                 data = await websocket.receive_text()
-                logger.info(f"DEBUG: Přijata data: {data[:100]}...")
+                logger.info(f"📨 DEBUG: Přijata data ({len(data)} znaků): {data[:200]}...")
                 
-                msg = json.loads(data)
-                event = msg.get("event")
-                logger.info(f"DEBUG: Event typ: {event}")
+                try:
+                    msg = json.loads(data)
+                    logger.info(f"✅ DEBUG: JSON parsování OK")
+                    event = msg.get("event", "unknown")
+                    logger.info(f"🎯 DEBUG: Event typ: '{event}'")
+                except json.JSONDecodeError as json_error:
+                    logger.error(f"❌ DEBUG: JSON parsing CHYBA: {json_error}")
+                    logger.error(f"❌ DEBUG: Problematická data: {data}")
+                    continue
                 
                 if event == "start":
                     logger.info("=== MEDIA STREAM START EVENT PŘIJAT! ===")
