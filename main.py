@@ -732,17 +732,19 @@ async def process_speech(request: Request):
                 # Rozšířený prompt pro vyhodnocení odpovědí
                 system_prompt = """Jsi AI asistent pro výuku obráběcích kapalin a servisu. Komunikuješ POUZE v češtině.
 
+🎯 DŮLEŽITÉ: VŽDY MUSÍŠ PŘIDAT SKÓRE NA KONEC!
+
 INSTRUKCE PRO VYHODNOCENÍ:
 1. Vyhodnoť správnost odpovědi studenta (0-100%)
 2. Poskytni krátkou zpětnou vazbu (max 2 věty)
-3. Na konci odpovědi VŽDY přidej skóre ve formátu: [SKÓRE: XX%]
+3. Na konci odpovědi POVINNĚ přidej skóre ve formátu: [SKÓRE: XX%]
 
-PŘÍKLADY HODNOCENÍ:
-- Úplně správná odpověď: [SKÓRE: 100%]
-- Částečně správná: [SKÓRE: 70%]
-- Nesprávná odpověď: [SKÓRE: 20%]
+PŘÍKLADY ODPOVĚDÍ:
+- "Výborně! Obráběcí kapaliny skutečně slouží k chlazení a mazání. [SKÓRE: 95%]"
+- "Částečně správně. Zapomněl jste na funkci odvodu třísek. [SKÓRE: 60%]"
+- "To není správné. Obráběcí kapaliny mají více funkcí než jen čištění. [SKÓRE: 25%]"
 
-Buď povzbuzující a konstruktivní. Pomáhej studentovi se učit."""
+⚠️ KRITICKÉ: Bez [SKÓRE: XX%] na konci se systém pokazí!"""
 
                 gpt_response = client.chat.completions.create(
                     model="gpt-4o-mini",
@@ -755,23 +757,26 @@ Buď povzbuzující a konstruktivní. Pomáhej studentovi se učit."""
                 )
                 
                 ai_answer = gpt_response.choices[0].message.content
-                logger.info(f"🤖 OpenAI odpověď: {ai_answer}")
+                logger.info(f"🤖 OpenAI odpověď ÚSPĚŠNĚ přijata: {ai_answer}")
                 
                 # Extrakce skóre z odpovědi
                 import re
                 score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
                 current_score = int(score_match.group(1)) if score_match else 0
                 
+                logger.info(f"📊 Extrahované skóre: {current_score}% (match: {score_match})")
+                
                 # Odstranění skóre z odpovědi pro TTS
                 clean_answer = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
                 
-                logger.info(f"📊 Vyhodnocené skóre: {current_score}%")
+                logger.info(f"🔊 Čistá odpověď pro TTS: '{clean_answer}'")
                 
                 # Kontrola postupu do další lekce (simulace - v reálné aplikaci by se načetl attempt_id)
                 session = SessionLocal()
                 try:
                     # Pro demo - najdi posledního uživatele (v reálné aplikaci by se použil attempt_id)
                     user = session.query(User).order_by(User.id.desc()).first()
+                    logger.info(f"👤 Načten uživatel: {user.name if user else 'None'}, aktuální lekce: {user.current_lesson_level if user else 'N/A'}")
                     
                     if user and current_score >= 90 and user.current_lesson_level == 0:
                         # Postup z vstupního testu do lekce 1
@@ -797,11 +802,16 @@ Buď povzbuzující a konstruktivní. Pomáhej studentovi se učit."""
                         
                     elif user and current_score < 90 and user.current_lesson_level == 0:
                         clean_answer += f" Dosáhli jste {current_score}%. Pro postup potřebujete alespoň 90%. Zkuste to znovu!"
+                        logger.info(f"📊 Uživatel {user.name} nedosáhl 90%, zůstává na lekci 0")
                         
                 except Exception as db_error:
-                    logger.error(f"Chyba při aktualizaci pokroku: {db_error}")
+                    logger.error(f"❌ Chyba při aktualizaci pokroku: {db_error}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
                 finally:
                     session.close()
+                
+                logger.info(f"🎤 Finální odpověď pro TTS: '{clean_answer}'")
                 
                 response.say(
                     clean_answer,
