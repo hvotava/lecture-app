@@ -581,34 +581,32 @@ async def voice_handler(request: Request):
     
     response = VoiceResponse()
     
-    # Úvodní hlášení
+    # TEST: Jednoduchý TTS test bez WebSocket
     response.say(
-        "Vítejte u AI asistenta pro výuku jazyků.",
-        language="cs-CZ",
-        rate="0.9",
-        voice="Google.cs-CZ-Standard-A"
-    )
-    response.say(
-        "Nyní vás připojuji k AI asistentovi.",
+        "Ahoj! Jsem AI asistent pro výuku jazyků. Toto je test hlasového výstupu pomocí Twilio TTS.",
         language="cs-CZ",
         rate="0.9",
         voice="Google.cs-CZ-Standard-A"
     )
     
-    # Konfigurace Media Streamu - použití Start místo Connect pro obousměrný stream
-    start = response.start()
-    start.stream(
-        url="wss://lecture-app-production.up.railway.app/audio",
-        track="both_tracks",  # Explicitně nastavíme obousměrný stream
-        status_callback="https://lecture-app-production.up.railway.app/stream-callback",
-        status_callback_method="POST",
-        name="ai_assistant_stream"
+    response.say(
+        "Pokud mě slyšíte, znamená to, že základní hlasový výstup funguje správně.",
+        language="cs-CZ",
+        rate="0.9",
+        voice="Google.cs-CZ-Standard-A"
     )
     
-    # Dlouhá pauza pro udržení hovoru
-    response.pause(length=3600)
+    response.say(
+        "WebSocket připojení momentálně testujeme. Děkuji za trpělivost.",
+        language="cs-CZ",
+        rate="0.9",
+        voice="Google.cs-CZ-Standard-A"
+    )
     
-    logger.info(f"TwiML odpověď: {response}")
+    # Ukončení hovoru
+    response.hangup()
+    
+    logger.info(f"TwiML odpověď (bez WebSocket): {response}")
     return Response(content=str(response), media_type="text/xml")
 
 @app.post("/voice/start-stream/")
@@ -1375,3 +1373,47 @@ async def websocket_status():
         "railway_websocket_support": "Testing...",
         "timestamp": "2025-07-24T19:15:00Z"
     } 
+
+@app.post("/tts")
+async def generate_tts(request: Request):
+    """HTTP endpoint pro generování TTS audio"""
+    try:
+        data = await request.json()
+        text = data.get('text', '')
+        
+        if not text:
+            return {"error": "Missing text parameter"}
+        
+        logger.info(f"🔊 Generuji TTS pro: {text[:50]}...")
+        
+        # OpenAI TTS
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not openai_api_key:
+            return {"error": "OpenAI API key not configured"}
+        
+        import openai
+        client = openai.OpenAI(api_key=openai_api_key)
+        
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="nova",
+            input=text,
+            response_format="wav"
+        )
+        
+        # Převod na base64 pro Twilio
+        import base64
+        audio_b64 = base64.b64encode(response.content).decode()
+        
+        logger.info("✅ TTS audio vygenerováno")
+        
+        return {
+            "success": True,
+            "audio": audio_b64,
+            "format": "wav",
+            "text": text[:100]
+        }
+        
+    except Exception as e:
+        logger.error(f"Chyba při TTS: {e}")
+        return {"error": str(e)} 
