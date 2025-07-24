@@ -27,6 +27,7 @@ import audioop
 import wave
 import asyncio
 import time
+import tempfile
 
 load_dotenv()
 
@@ -560,64 +561,124 @@ async def voice_start_stream(request: Request):
 """
     return Response(content=response, media_type="text/xml")
 
+# Pomocná funkce pro práci s OpenAI Assistant
+async def get_assistant_info(client, assistant_id: str):
+    """Získá informace o OpenAI asistentovi"""
+    try:
+        assistant = await client.beta.assistants.retrieve(assistant_id)
+        logger.info(f"Assistant info - ID: {assistant.id}, Name: {assistant.name}, Model: {assistant.model}")
+        return assistant
+    except Exception as e:
+        logger.error(f"Chyba při získávání informací o asistentovi {assistant_id}: {e}")
+        return None
+
+async def wav_to_mulaw(audio_data: bytes) -> bytes:
+    """Převede WAV audio na μ-law formát pro Twilio"""
+    try:
+        from pydub import AudioSegment
+        
+        # Načteme WAV audio
+        audio_segment = AudioSegment.from_wav(io.BytesIO(audio_data))
+        
+        # Převedeme na 8kHz mono
+        audio_segment = audio_segment.set_frame_rate(8000).set_channels(1)
+        
+        # Převedeme na μ-law
+        raw_audio = audio_segment.raw_data
+        mulaw_audio = audioop.lin2ulaw(raw_audio, 2)  # 2 bytes per sample
+        
+        return mulaw_audio
+    except Exception as e:
+        logger.error(f"Chyba při převodu WAV na μ-law: {e}")
+        return b""
+
 @app.websocket("/audio")
 async def audio_stream(websocket: WebSocket):
     await websocket.accept()
     logger.info("=== AUDIO WEBSOCKET HANDLER SPUŠTĚN ===")
     
-    # Inicializace OpenAI Realtime klienta
-    try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI()
-        logger.info("OpenAI Realtime služba inicializována")
-    except Exception as e:
-        logger.error(f"Chyba při inicializaci OpenAI Realtime: {e}")
+    # Připojení k OpenAI Realtime API
+    openai_api_key = os.getenv('OPENAI_API_KEY')
+    if not openai_api_key:
+        logger.error("OPENAI_API_KEY není nastavena")
+        await websocket.close()
         return
 
-    # Konfigurace session pro speech-to-speech
     try:
-        await websocket.send_text(json.dumps({
-            "type": "speech.create",  # Správný typ pro generování řeči
-            "model": "tts-1",
-            "voice": "alloy",
-            "input": {
-                "text": "Ahoj! Jsem váš AI asistent pro výuku jazyků. Jak vám mohu pomoci?",
-                "format": "g711_ulaw",
-                "sample_rate": 8000,
-                "channels": 1
+        import websockets
+        
+        # Správná URL a headers pro OpenAI Realtime API s gpt-4.1-mini
+        openai_ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4.1-mini"
+        headers = {
+            "Authorization": f"Bearer {openai_api_key}",
+            "OpenAI-Beta": "realtime=v1"
+        }
+        
+        logger.info("Připojuji se k OpenAI Realtime API...")
+        
+        # Připojení k OpenAI Realtime API
+        openai_ws = await websockets.connect(openai_ws_url, extra_headers=headers)
+        logger.info("✅ Připojeno k OpenAI Realtime API")
+        
+        # Konfigurace session
+        session_config = {
+            "type": "session.update",
+            "session": {
+                "modalities": ["text", "audio"],
+                "instructions": """Jsi užitečný AI asistent pro výuku jazyků. Komunikuješ v češtině.
+
+Tvoje úkoly:
+- Odpovídej na otázky studentů o lekci
+- Pomáhej s vysvětlením obtížných částí
+- Buď trpělivý a povzbuzující
+- Mluv přirozeně a srozumitelně
+- Pokud student odpoví na otázku, vyhodnoť ji a poskytni zpětnou vazbu
+- Můžeš klást otázky k lekci pro ověření porozumění
+
+Vždy zůstávaj v kontextu výuky a buď konstruktivní. Odpovídej stručně a jasně.""",
+                "voice": "alloy",
+                "input_audio_format": "g711_ulaw",
+                "output_audio_format": "g711_ulaw",
+                "input_audio_transcription": {
+                    "model": "whisper-1"
+                },
+                "turn_detection": {
+                    "type": "server_vad",
+                    "threshold": 0.5,
+                    "prefix_padding_ms": 300,
+                    "silence_duration_ms": 800
+                },
+                "tools": [],
+                "tool_choice": "auto",
+                "temperature": 0.8,
+                "max_response_output_tokens": 2048
             }
-        }))
-        logger.info("Úvodní pozdrav odeslán")
-
-        # Konfigurace pro zpracování vstupu
-        await websocket.send_text(json.dumps({
-            "type": "transcription.configure",
-            "model": "whisper-1",
-            "language": "cs",
-            "response_format": "text",
-            "temperature": 0.7,
-            "prompt": "Konverzace v češtině o výuce jazyků."
-        }))
-        logger.info("Konfigurace transkripce odeslána")
-
-        # Nastavení detekce řeči
-        await websocket.send_text(json.dumps({
-            "type": "vad.configure",
-            "threshold": 0.5,
-            "min_speech_duration": 0.3,
-            "min_silence_duration": 0.5,
-            "speech_pad_ms": 300,
-            "silence_pad_ms": 200
-        }))
-        logger.info("Konfigurace VAD odeslána")
+        }
+        
+        await openai_ws.send(json.dumps(session_config))
+        logger.info("Session config odeslána do OpenAI")
+        
+        # Pošleme úvodní zprávu
+        await asyncio.sleep(1)  # Počkáme na inicializaci session
+        
+        initial_response = {
+            "type": "response.create",
+            "response": {
+                "modalities": ["text", "audio"],
+                "instructions": "Pozdrav uživatele a představ se jako AI asistent pro výuku jazyků. Řekni, že jsi připraven pomoci."
+            }
+        }
+        await openai_ws.send(json.dumps(initial_response))
+        logger.info("Úvodní response vytvořena")
 
     except Exception as e:
-        logger.error(f"Chyba při konfiguraci OpenAI: {e}")
+        logger.error(f"Chyba při připojování k OpenAI Realtime API: {e}")
+        await websocket.close()
         return
 
     # Stav konverzace
     stream_sid = None
-    inbound_buffer = bytearray()  # Buffer pro příchozí audio (od uživatele)
+    inbound_buffer = bytearray()
     last_audio_time = None
     is_responding = False
 
@@ -627,24 +688,69 @@ async def audio_stream(websocket: WebSocket):
         except Exception as e:
             logger.error(f"[safe_send_text] WebSocket není připojen: {e}")
 
-    async def handle_speech_input(text: str):
-        """Zpracuje rozpoznaný text a vygeneruje odpověď."""
+    async def safe_send_openai(msg):
         try:
-            # Generování odpovědi
-            await websocket.send_text(json.dumps({
-                "type": "speech.create",
-                "model": "tts-1",
-                "voice": "alloy",
-                "input": {
-                    "text": f"Rozumím, že říkáte: {text}. Moment prosím, zpracovávám odpověď.",
-                    "format": "g711_ulaw",
-                    "sample_rate": 8000,
-                    "channels": 1
-                }
-            }))
-            logger.info(f"Odpověď na vstup odeslána: {text}")
+            await openai_ws.send(json.dumps(msg))
         except Exception as e:
-            logger.error(f"Chyba při generování odpovědi: {e}")
+            logger.error(f"[safe_send_openai] OpenAI WebSocket není připojen: {e}")
+
+    # Task pro zpracování zpráv z OpenAI
+    async def handle_openai_messages():
+        try:
+            async for message in openai_ws:
+                data = json.loads(message)
+                message_type = data.get('type', 'unknown')
+                
+                logger.info(f"[OpenAI] Zpráva: {message_type}")
+                
+                if message_type == 'session.created':
+                    session_id = data.get('session', {}).get('id')
+                    logger.info(f"OpenAI session vytvořena: {session_id}")
+                    
+                elif message_type == 'response.audio.delta':
+                    # Audio chunk z OpenAI
+                    audio_data = data.get('delta', '')
+                    if audio_data and stream_sid:
+                        # Pošleme audio do Twilio
+                        media_message = {
+                            "event": "media",
+                            "streamSid": stream_sid,
+                            "media": {
+                                "payload": audio_data
+                            }
+                        }
+                        await safe_send_text(json.dumps(media_message))
+                        logger.info("[OpenAI->Twilio] Audio chunk odeslán")
+                        
+                elif message_type == 'response.audio.done':
+                    logger.info("OpenAI dokončilo generování audia")
+                    is_responding = False
+                    
+                elif message_type == 'input_audio_buffer.speech_started':
+                    logger.info("OpenAI detekoval začátek řeči")
+                    
+                elif message_type == 'input_audio_buffer.speech_stopped':
+                    logger.info("OpenAI detekoval konec řeči")
+                    if not is_responding:
+                        # Vytvoříme response
+                        await safe_send_openai({"type": "response.create"})
+                        is_responding = True
+                        logger.info("Vytvářím odpověď po detekci konce řeči")
+                        
+                elif message_type == 'conversation.item.input_audio_transcription.completed':
+                    # Kompletní transkripce
+                    transcript = data.get('transcript', '')
+                    logger.info(f"[TRANSKRIPCE] Uživatel řekl: {transcript}")
+                    
+                elif message_type == 'error':
+                    error_info = data.get('error', {})
+                    logger.error(f"Chyba z OpenAI: {error_info}")
+                    
+        except Exception as e:
+            logger.error(f"Chyba při zpracování zpráv z OpenAI: {e}")
+
+    # Spustíme handler pro OpenAI zprávy jako task
+    openai_task = asyncio.create_task(handle_openai_messages())
 
     try:
         while True:
@@ -664,132 +770,30 @@ async def audio_stream(websocket: WebSocket):
                     seq = msg.get("sequenceNumber", "?")
 
                     if track == "inbound":  # Audio od uživatele
-                        audio_bytes = base64.b64decode(payload)
-                        inbound_buffer.extend(audio_bytes)
-                        last_audio_time = datetime.now()
-                        logger.info(f"[AUDIO-CHUNK] Inbound audio chunk #{seq}, buffer: {len(inbound_buffer)} bytes")
-
-                        # Rozdělíme buffer na 160B chunky
-                        while len(inbound_buffer) >= 160:
-                            chunk = inbound_buffer[:160]
-                            remaining = inbound_buffer[160:]
-                            inbound_buffer = bytearray(remaining)
-                            
-                            # Odeslání 160B chunku do OpenAI
-                            try:
-                                media_message = {
-                                    "type": "audio.append",  # Správný typ pro audio data
-                                    "audio": base64.b64encode(chunk).decode('utf-8'),
-                                    "format": "g711_ulaw",
-                                    "sample_rate": 8000,
-                                    "channels": 1
-                                }
-                                await safe_send_text(json.dumps(media_message))
-                                logger.info(f"[MEDIA] Inbound audio chunk odeslán do OpenAI Realtime (160 bytes)")
-                            except Exception as e:
-                                logger.error(f"Chyba při odesílání do OpenAI Realtime: {e}")
-
-                    elif track == "outbound":  # Audio od AI
-                        # Kontrola velikosti chunků
-                        audio_bytes = base64.b64decode(payload)
-                        if len(audio_bytes) != 160:  # 20ms @ 8kHz μ-law = 160 bytes
-                            logger.warning(f"Nesprávná velikost audio chunku: {len(audio_bytes)} bytes (očekáváno 160)")
-                            # Rozdělíme chunk na menší části po 160 bytech
-                            for i in range(0, len(audio_bytes), 160):
-                                chunk = audio_bytes[i:i+160]
-                                if len(chunk) == 160:  # Odesíláme pouze kompletní chunky
-                                    try:
-                                        # Twilio očekává event: "media" s media.payload
-                                        media_message = {
-                                            "event": "media",
-                                            "media": {
-                                                "payload": base64.b64encode(chunk).decode('utf-8')
-                                            }
-                                        }
-                                        await safe_send_text(json.dumps(media_message))
-                                        logger.info(f"[AUDIO-CHUNK] Outbound audio chunk přeposlán do Twilia (μ-law, 8kHz, mono, 160B)")
-                                    except Exception as e:
-                                        logger.error(f"Chyba při přeposílání rozděleného audio chunku: {e}")
-                        else:
-                            # Standardní odeslání pro správně veliké chunky
-                            try:
-                                # Twilio očekává event: "media" s media.payload
-                                media_message = {
-                                    "event": "media",
-                                    "media": {
-                                        "payload": payload
-                                    }
-                                }
-                                await safe_send_text(json.dumps(media_message))
-                                logger.info(f"[AUDIO-CHUNK] Outbound audio chunk přeposlán do Twilia (μ-law, 8kHz, mono, 160B)")
-                            except Exception as e:
-                                logger.error(f"Chyba při přeposílání outbound audia: {e}")
-
-                elif event == "input_audio_buffer.speech_stopped":
-                    # Když uživatel přestane mluvit, vytvoříme response
-                    if not is_responding:
+                        # Pošleme přímo do OpenAI Realtime API
                         try:
-                            await safe_send_text(json.dumps({"type": "response.create"}))
-                            is_responding = True
-                            logger.info("Vytvářím odpověď po detekci konce řeči")
+                            audio_message = {
+                                "type": "input_audio_buffer.append",
+                                "audio": payload  # Použijeme původní base64 data
+                            }
+                            await safe_send_openai(audio_message)
+                            logger.info(f"[Twilio->OpenAI] Audio chunk #{seq} odeslán (track: {track})")
                         except Exception as e:
-                            logger.error(f"Chyba při vytváření odpovědi: {e}")
-
-                elif event == "response.done":
-                    # Odpověď byla dokončena
-                    is_responding = False
-                    logger.info("Odpověď dokončena")
+                            logger.error(f"Chyba při odesílání audio do OpenAI: {e}")
 
                 elif event == "stop":
                     logger.info("Media Stream ukončen")
-                    if inbound_buffer:  # Odešleme poslední inbound audio
-                        # Rozdělíme zbývající buffer na 160B chunky
-                        while len(inbound_buffer) >= 160:
-                            chunk = inbound_buffer[:160]
-                            remaining = inbound_buffer[160:]
-                            inbound_buffer = bytearray(remaining)
-                            
-                            try:
-                                media_message = {
-                                    "type": "input_audio_buffer.append",
-                                    "audio": base64.b64encode(chunk).decode('utf-8')
-                                }
-                                await safe_send_text(json.dumps(media_message))
-                                logger.info(f"[MEDIA] Poslední inbound audio chunk odeslán do OpenAI Realtime (160 bytes)")
-                            except Exception as e:
-                                logger.error(f"Chyba při odesílání posledního audio chunku: {e}")
-
-                        # Pokud zbývá neúplný chunk, doplníme ho tichem
-                        if len(inbound_buffer) > 0:
-                            padding = bytearray([0xFF] * (160 - len(inbound_buffer)))  # 0xFF = ticho v μ-law
-                            inbound_buffer.extend(padding)
-                            try:
-                                media_message = {
-                                    "type": "input_audio_buffer.append",
-                                    "audio": base64.b64encode(bytes(inbound_buffer)).decode('utf-8')
-                                }
-                                await safe_send_text(json.dumps(media_message))
-                                logger.info(f"[MEDIA] Poslední doplněný chunk odeslán do OpenAI Realtime (160 bytes)")
-                            except Exception as e:
-                                logger.error(f"Chyba při odesílání posledního doplněného chunku: {e}")
-
-                        # Vytvoříme poslední odpověď
-                        if not is_responding:
-                            await safe_send_text(json.dumps({"type": "response.create"}))
-                            logger.info("Vytvářím poslední odpověď")
-
+                    
+                    # Dokončíme audio buffer v OpenAI
+                    try:
+                        await safe_send_openai({"type": "input_audio_buffer.commit"})
+                        logger.info("Audio buffer committed v OpenAI")
+                    except Exception as e:
+                        logger.error(f"Chyba při commit audio bufferu: {e}")
+                    
                     # Počkáme chvíli na dokončení odpovědi
                     await asyncio.sleep(2)
-                    try:
-                        await websocket.close()
-                        logger.info("WebSocket spojení uzavřeno po stream-stopped")
-                    except Exception as e:
-                        logger.warning(f"Chyba při zavírání WebSocket: {e}")
                     break
-
-                elif event == "conversation.item.input_audio_transcription.delta":
-                    # Logujeme průběžný přepis od Whisper-1
-                    logger.info(f"[WHISPER] Transkripce: {msg.get('delta', '')}")
 
             except json.JSONDecodeError as e:
                 logger.error(f"Neplatný JSON z Twilia: {e}")
@@ -802,6 +806,19 @@ async def audio_stream(websocket: WebSocket):
         logger.error(f"Chyba ve WebSocket /audio: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
+    finally:
+        # Ukončíme OpenAI task
+        if not openai_task.done():
+            openai_task.cancel()
+        
+        # Zavřeme OpenAI WebSocket
+        try:
+            await openai_ws.close()
+            logger.info("OpenAI WebSocket uzavřen")
+        except:
+            pass
+        
+        # Zavřeme Twilio WebSocket
         try:
             await websocket.close()
         except:

@@ -7,4 +7,4 @@ except ImportError as e:
     # Pokud není potřeba, může být soubor prázdný
     pass
 
-__all__ = ['db', 'User', 'Lesson', 'Attempt', 'Answer'] 
+__all__ = ['db', 'User', 'Lesson', 'Attempt', 'Answer']

@@ -201,7 +201,7 @@ class TwilioService:
             else:
             # Získání odpovědi od ChatGPT
                 response = openai_svc.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",

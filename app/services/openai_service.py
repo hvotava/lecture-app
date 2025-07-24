@@ -43,7 +43,7 @@ class OpenAIService:
         try:
             logger.info(f"Generuji otázky pro text délky {len(text)} v jazyce {language}")
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",
@@ -91,7 +91,7 @@ class OpenAIService:
         try:
             logger.info(f"Hodnotím odpověď na otázku: {question[:50]}...")
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "system",
@@ -143,7 +143,7 @@ Vrať odpověď ve formátu JSON pole objektů s klíči:
 - "difficulty": obtížnost (1-5)"""
 
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4.1-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Obsah lekce:\n{lesson_script}"}
@@ -259,7 +259,7 @@ Vrať odpověď ve formátu JSON pole objektů s klíči:
 - "difficulty": obtížnost (1-5, kde 1=snadná, 5=obtížná)"""
 
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4.1-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Obsah lekce:\n{lesson_script}"}
@@ -316,7 +316,7 @@ Vrať JSON ve formátu:
 }}"""
 
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4.1-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"""
@@ -394,7 +394,7 @@ Vrať odpověď ve formátu JSON:
 }}"""
 
             response = self.client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+                model="gpt-4.1-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"""

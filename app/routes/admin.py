@@ -280,24 +280,24 @@ def delete_user(user_id):
 def new_user():
     """Vytvoří nového uživatele."""
     try:
-        form = UserForm()
-        if form.validate_on_submit():
+    form = UserForm()
+    if form.validate_on_submit():
             try:
-                user = User(
-                    name=form.name.data,
-                    phone=format_phone_number(form.phone.data),
-                    language=form.language.data,
-                    detail=form.detail.data
-                )
-                db.session.add(user)
-                db.session.commit()
-                flash("Uživatel byl úspěšně vytvořen", "success")
-                return redirect(url_for("admin.list_users"))
+        user = User(
+            name=form.name.data,
+            phone=format_phone_number(form.phone.data),
+            language=form.language.data,
+            detail=form.detail.data
+        )
+        db.session.add(user)
+        db.session.commit()
+        flash("Uživatel byl úspěšně vytvořen", "success")
+        return redirect(url_for("admin.list_users"))
             except Exception as e:
                 db.session.rollback()
                 logger.error(f"Chyba při vytváření uživatele v databázi: {str(e)}")
                 flash(f"Chyba při vytváření uživatele: {str(e)}", "error")
-        return render_template("users/form.html", form=form)
+    return render_template("users/form.html", form=form)
     except Exception as e:
         logger.error(f"Kritická chyba v new_user endpointu: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -422,7 +422,7 @@ def network_test():
     except Exception as e:
         results['http_test'] = f'CHYBA: {str(e)}'
     
-    return jsonify(results)
+    return jsonify(results) 
 
 @bp.route('/db-test')
 def db_test():

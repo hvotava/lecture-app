@@ -12,7 +12,7 @@
                     <input type="text" class="form-control" id="title" name="title" value="{{ form.title }}">
                     {% for error in form['title.errors'] %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
-                    {% endfor %}
+                        {% endfor %}
                 </div>
                 <div class="mb-3">
                     <label for="language" class="form-label">Jazyk</label>
@@ -22,14 +22,14 @@
                     </select>
                     {% for error in form['language.errors'] %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
-                    {% endfor %}
+                        {% endfor %}
                 </div>
                 <div class="mb-3">
                     <label for="script" class="form-label">Skript</label>
                     <textarea class="form-control" id="script" name="script" rows="10">{{ form.script }}</textarea>
                     {% for error in form['script.errors'] %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
-                    {% endfor %}
+                        {% endfor %}
                 </div>
                 <div class="mb-3">
                     <label for="questions" class="form-label">Otázky (JSON)</label>
@@ -44,7 +44,7 @@
                     </div>
                     {% for error in form['questions.errors'] %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
-                    {% endfor %}
+                        {% endfor %}
                 </div>
                 <div class="d-flex justify-content-between">
                     <a href="{{ request.url_for('admin_list_lessons') }}" class="btn btn-outline-secondary">Zpět</a>

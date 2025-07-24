@@ -20,7 +20,7 @@ class OpenAIRealtimeService:
     
     def __init__(self):
         self.api_key = os.getenv('OPENAI_API_KEY')
-        self.ws_url = "wss://api.openai.com/v1/audio/speech"  # Správná URL pro OpenAI Realtime API
+        self.ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4.1-mini"  # Správná URL pro OpenAI Realtime API
         self.openai_ws = None
         self.twilio_ws = None
         self.audio_queue = Queue()
@@ -143,14 +143,14 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní.""",
                         logger.info("Odpověď odeslána k syntéze")
                     except Exception as e:
                         logger.error(f"Chyba při generování odpovědi: {e}")
-                        
+                    
                 elif message_type == 'error':
                     error_info = data.get('error', {})
                     logger.error(f"Chyba z OpenAI: {error_info}")
                     
         except Exception as e:
             logger.error(f"Chyba při zpracování zpráv z OpenAI: {str(e)}")
-            
+    
     async def send_audio_to_openai(self, audio_data: bytes):
         """Odešle audio data do OpenAI."""
         try:
@@ -296,12 +296,12 @@ def handle_media_stream_websocket(request, attempt_id: str = None):
     import threading
     import sys
     from queue import Queue
-    logger.info(f"=== ZAČÁTEK MEDIA STREAM WEBSOCKET ===")
+        logger.info(f"=== ZAČÁTEK MEDIA STREAM WEBSOCKET ===")
     logger.info(f"Request headers: {dict(request.headers)}")
     logger.info(f"Request method: {request.method}")
     logger.info(f"Request path: {request.path}")
     logger.info(f"Request args: {request.args}")
-    logger.info(f"Attempt ID: {attempt_id}")
+        logger.info(f"Attempt ID: {attempt_id}")
     try:
         # Získání kontextu lekce
         lesson_context = ""

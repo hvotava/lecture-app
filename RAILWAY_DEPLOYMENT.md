@@ -94,7 +94,7 @@ Pokud deployment selže:
 Railway automaticky škáluje podle potřeby:
 - Minimum: 0 instancí (sleep mode)
 - Maximum: podle vašeho plánu
-- Auto-wake při příchozím requestu
+- Auto-wake při příchozím requestu 
 
 ## Testování
 
