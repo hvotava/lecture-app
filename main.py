@@ -581,32 +581,100 @@ async def voice_handler(request: Request):
     
     response = VoiceResponse()
     
-    # TEST: Jednoduchý TTS test bez WebSocket
+    # Uvítání s funkčním TTS
     response.say(
-        "Ahoj! Jsem AI asistent pro výuku jazyků. Toto je test hlasového výstupu pomocí Twilio TTS.",
+        "Vítejte u AI asistenta pro výuku jazyků!",
         language="cs-CZ",
         rate="0.9",
         voice="Google.cs-CZ-Standard-A"
     )
     
     response.say(
-        "Pokud mě slyšíte, znamená to, že základní hlasový výstup funguje správně.",
+        "Můžete se mě zeptat na cokoliv nebo mi říct, co vás zajímá.",
         language="cs-CZ",
         rate="0.9",
         voice="Google.cs-CZ-Standard-A"
     )
     
+    # Gather pro zachycení hlasového vstupu
+    gather = response.gather(
+        input='speech',
+        timeout=10,
+        speech_timeout='auto',
+        action='/voice/process',
+        method='POST',
+        language='cs-CZ',
+        speech_model='phone_call'
+    )
+    
+    gather.say(
+        "Mluvte prosím, naslouchám...",
+        language="cs-CZ",
+        rate="0.9",
+        voice="Google.cs-CZ-Standard-A"
+    )
+    
+    # Fallback pokud uživatel neodpoví
     response.say(
-        "WebSocket připojení momentálně testujeme. Děkuji za trpělivost.",
+        "Nerozuměl jsem vám. Zkuste to prosím znovu nebo hovor ukončete.",
         language="cs-CZ",
         rate="0.9",
         voice="Google.cs-CZ-Standard-A"
     )
     
-    # Ukončení hovoru
     response.hangup()
     
-    logger.info(f"TwiML odpověď (bez WebSocket): {response}")
+    logger.info(f"TwiML odpověď (hybridní): {response}")
+    return Response(content=str(response), media_type="text/xml")
+
+@app.post("/voice/process")
+async def process_speech(request: Request):
+    """Zpracuje hlasový vstup od uživatele"""
+    logger.info("Přijat hlasový vstup od uživatele")
+    
+    form = await request.form()
+    speech_result = form.get('SpeechResult', '')
+    confidence = form.get('Confidence', '0')
+    
+    logger.info(f"Rozpoznaná řeč: '{speech_result}' (confidence: {confidence})")
+    
+    response = VoiceResponse()
+    
+    if speech_result:
+        # Zde by bylo volání OpenAI API pro odpověď
+        response.say(
+            f"Rozuměl jsem vám. Řekl jste: {speech_result}. Toto je testovací odpověď.",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        
+        # Další kolo konverzace
+        gather = response.gather(
+            input='speech',
+            timeout=10,
+            action='/voice/process',
+            method='POST',
+            language='cs-CZ'
+        )
+        
+        gather.say(
+            "Máte další otázku?",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+    else:
+        response.say(
+            "Omlouvám se, nerozuměl jsem vám. Hovor ukončuji.",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+    
+    response.hangup()
+    
+    logger.info(f"Odpověď na hlasový vstup: {response}")
     return Response(content=str(response), media_type="text/xml")
 
 @app.post("/voice/start-stream/")
