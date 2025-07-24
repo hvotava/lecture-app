@@ -66,9 +66,39 @@ def admin_root(request: Request):
 @admin_router.get("/users", response_class=HTMLResponse, name="admin_list_users")
 def admin_list_users(request: Request):
     session = SessionLocal()
-    users = session.query(User).all()
-    session.close()
-    return templates.TemplateResponse("users/list.html", {"request": request, "users": users})
+    try:
+        # Automatická migrace - přidej chybějící sloupce
+        try:
+            # Test jestli current_lesson_level existuje
+            session.execute(text("SELECT current_lesson_level FROM users LIMIT 1"))
+        except Exception:
+            # Sloupec neexistuje, přidej ho
+            logger.info("🔧 Přidávám chybějící sloupec current_lesson_level")
+            try:
+                session.execute(text("ALTER TABLE users ADD COLUMN current_lesson_level INTEGER DEFAULT 0"))
+                session.commit()
+                logger.info("✅ Sloupec current_lesson_level přidán")
+            except Exception as alter_error:
+                logger.warning(f"Chyba při přidávání sloupce: {alter_error}")
+                session.rollback()
+        
+        # Bezpečné načtení uživatelů
+        users = session.query(User).all()
+        
+        # Zajisti, že všichni uživatelé mají current_lesson_level
+        for user in users:
+            if not hasattr(user, 'current_lesson_level') or user.current_lesson_level is None:
+                user.current_lesson_level = 0
+        
+        return templates.TemplateResponse("users/list.html", {"request": request, "users": users})
+    except Exception as e:
+        logger.error(f"❌ Chyba v admin_list_users: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        # Fallback - prázdný seznam
+        return templates.TemplateResponse("users/list.html", {"request": request, "users": []})
+    finally:
+        session.close()
 
 @admin_router.get("/users/new", response_class=HTMLResponse, name="admin_new_user_get")
 def admin_new_user_get(request: Request):
@@ -566,6 +596,78 @@ def admin_debug_env():
         "timestamp": datetime.now().isoformat()
     }
     return debug_info
+
+@admin_router.get("/migrate-db", response_class=JSONResponse)
+def admin_migrate_db():
+    """Provede databázové migrace pro nové funkce"""
+    session = SessionLocal()
+    results = {"migrations": []}
+    
+    try:
+        # 1. Přidej current_lesson_level do users
+        try:
+            session.execute(text("SELECT current_lesson_level FROM users LIMIT 1"))
+            results["migrations"].append("current_lesson_level: již existuje")
+        except Exception:
+            try:
+                session.execute(text("ALTER TABLE users ADD COLUMN current_lesson_level INTEGER DEFAULT 0"))
+                session.commit()
+                results["migrations"].append("current_lesson_level: ✅ přidán")
+            except Exception as e:
+                results["migrations"].append(f"current_lesson_level: ❌ {str(e)}")
+                session.rollback()
+        
+        # 2. Přidej lesson_number do lessons
+        try:
+            session.execute(text("SELECT lesson_number FROM lessons LIMIT 1"))
+            results["migrations"].append("lesson_number: již existuje")
+        except Exception:
+            try:
+                session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_number INTEGER DEFAULT 0"))
+                session.execute(text("ALTER TABLE lessons ADD COLUMN required_score FLOAT DEFAULT 90.0"))
+                session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_type VARCHAR(20) DEFAULT 'standard'"))
+                session.commit()
+                results["migrations"].append("lesson columns: ✅ přidány")
+            except Exception as e:
+                results["migrations"].append(f"lesson columns: ❌ {str(e)}")
+                session.rollback()
+        
+        # 3. Vytvoř user_progress tabulku
+        try:
+            session.execute(text("SELECT id FROM user_progress LIMIT 1"))
+            results["migrations"].append("user_progress: již existuje")
+        except Exception:
+            try:
+                create_progress_table = """
+                CREATE TABLE user_progress (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    lesson_number INTEGER NOT NULL,
+                    is_completed BOOLEAN DEFAULT FALSE,
+                    best_score FLOAT,
+                    attempts_count INTEGER DEFAULT 0,
+                    first_completed_at TIMESTAMP,
+                    last_attempt_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+                session.execute(text(create_progress_table))
+                session.commit()
+                results["migrations"].append("user_progress: ✅ vytvořena")
+            except Exception as e:
+                results["migrations"].append(f"user_progress: ❌ {str(e)}")
+                session.rollback()
+        
+        results["status"] = "completed"
+        
+    except Exception as e:
+        results["status"] = "error"
+        results["error"] = str(e)
+        session.rollback()
+    finally:
+        session.close()
+    
+    return results
 
 # Připojení admin routeru
 app.include_router(admin_router)
