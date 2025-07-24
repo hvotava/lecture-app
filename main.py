@@ -607,7 +607,7 @@ async def audio_stream(websocket: WebSocket):
     try:
         import websockets
         
-        # Správná URL a headers pro OpenAI Realtime API s gpt-4o-realtime-preview
+        # Správná URL a headers pro OpenAI Realtime API podle oficiální dokumentace
         openai_ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
         headers = {
             "Authorization": f"Bearer {openai_api_key}",
@@ -615,10 +615,36 @@ async def audio_stream(websocket: WebSocket):
         }
         
         logger.info("Připojuji se k OpenAI Realtime API...")
+        logger.info(f"URL: {openai_ws_url}")
+        logger.info(f"Headers: {dict(headers)}")  # Pro debug
         
         # Připojení k OpenAI Realtime API
-        openai_ws = await websockets.connect(openai_ws_url, extra_headers=headers)
-        logger.info("✅ Připojeno k OpenAI Realtime API")
+        try:
+            # SSL context - na produkci by měl být správně nakonfigurován
+            import ssl
+            ssl_context = ssl.create_default_context()
+            # Na Railway.com by toto nemělo být potřeba, ale pro lokální vývoj ano
+            
+            openai_ws = await websockets.connect(openai_ws_url, extra_headers=headers, ssl=ssl_context)
+            logger.info("✅ Připojení k OpenAI Realtime API úspěšné!")
+        except websockets.exceptions.WebSocketException as e:
+            logger.error(f"❌ WebSocket chyba při připojování k OpenAI: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            try:
+                await websocket.close()
+            except:
+                pass
+            return
+        except Exception as e:
+            logger.error(f"❌ Obecná chyba při připojování k OpenAI: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            try:
+                await websocket.close()
+            except:
+                pass
+            return
         
         # Konfigurace session
         session_config = {
