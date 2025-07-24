@@ -1616,10 +1616,10 @@ Vyhodnoť jeho odpověď."""
                                     )
                                     
                                     if updated_session:
-                                        if updated_session.is_completed:
+                                        if updated_session.get('is_completed'):
                                             # TEST DOKONČEN
-                                            final_score = updated_session.current_score
-                                            total_questions = len(updated_session.answers)
+                                            final_score = updated_session.get('current_score', 0)
+                                            total_questions = len(updated_session.get('answers', []))
                                             
                                             if final_score >= 90:
                                                 # ÚSPĚŠNÝ POSTUP
@@ -1636,7 +1636,7 @@ Vyhodnoť jeho odpověď."""
                                             # DALŠÍ OTÁZKA
                                             next_question = get_current_question(updated_session)
                                             if next_question:
-                                                progress = f"({updated_session.current_question_index}/{updated_session.total_questions})"
+                                                progress = f"({updated_session.get('current_question_index', 0)}/{updated_session.get('total_questions', 0)})"
                                                 next_text = f"{clean_feedback} Další otázka {progress}: {next_question.get('question', '')}"
                                                 response.say(next_text, language="cs-CZ", rate="0.9")
                                                 logger.info(f"🎯 Další otázka {progress}: {next_question.get('question', '')}")
@@ -2890,15 +2890,23 @@ def get_or_create_test_session(user_id: int, lesson_id: int, attempt_id: int = N
     finally:
         session.close()
 
-def get_current_question(test_session: TestSession) -> dict:
-    """Získá aktuální otázku pro test session"""
-    if test_session.current_question_index >= len(test_session.questions_data):
+def get_current_question(test_session) -> dict:
+    """Získá aktuální otázku pro test session (přijímá TestSession objekt nebo dict)"""
+    # Podporuje jak TestSession objekt, tak dict
+    if isinstance(test_session, dict):
+        current_index = test_session.get('current_question_index', 0)
+        questions_data = test_session.get('questions_data', [])
+    else:
+        current_index = test_session.current_question_index
+        questions_data = test_session.questions_data
+    
+    if current_index >= len(questions_data):
         return None
     
-    return test_session.questions_data[test_session.current_question_index]
+    return questions_data[current_index]
 
 def save_answer_and_advance(test_session_id: int, user_answer: str, score: float, feedback: str):
-    """Uloží odpověď a posune na další otázku"""
+    """Uloží odpověď a posune na další otázku - vrací dict s daty místo objektu"""
     session = SessionLocal()
     try:
         test_session = session.query(TestSession).get(test_session_id)
@@ -2944,7 +2952,19 @@ def save_answer_and_advance(test_session_id: int, user_answer: str, score: float
             flag_modified(test_session, 'scores')
             
             session.commit()
-            return test_session
+            
+            # VRAŤ DICT S DATY MÍSTO OBJEKTU (objekt se stane detached po zavření session)
+            return {
+                'id': test_session.id,
+                'current_question_index': test_session.current_question_index,
+                'total_questions': test_session.total_questions,
+                'questions_data': test_session.questions_data,
+                'answers': test_session.answers,
+                'scores': test_session.scores,
+                'current_score': test_session.current_score,
+                'is_completed': test_session.is_completed,
+                'completed_at': test_session.completed_at
+            }
             
     finally:
         session.close()
