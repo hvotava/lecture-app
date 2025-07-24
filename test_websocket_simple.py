@@ -12,7 +12,7 @@ async def test_websocket():
     """Test WebSocket připojení"""
     
     # URL WebSocket endpointu
-    url = "wss://lecture-app-production.up.railway.app/audio"
+    url = "wss://lecture-app-production.up.railway.app/audio-test"
     
     print(f"🔗 Připojuji se na: {url}")
     

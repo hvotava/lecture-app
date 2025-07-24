@@ -592,6 +592,51 @@ async def wav_to_mulaw(audio_data: bytes) -> bytes:
         logger.error(f"Chyba při převodu WAV na μ-law: {e}")
         return b""
 
+@app.websocket("/audio-test")
+async def audio_stream_test(websocket: WebSocket):
+    """Jednoduchý test WebSocket handler bez OpenAI připojení"""
+    await websocket.accept()
+    logger.info("=== AUDIO TEST WEBSOCKET HANDLER SPUŠTĚN ===")
+    
+    try:
+        while True:
+            # Čekáme na zprávu od klienta
+            data = await websocket.receive_text()
+            logger.info(f"Přijata zpráva: {data[:100]}...")
+            
+            # Parsujeme JSON
+            try:
+                message = json.loads(data)
+                event_type = message.get("event", "unknown")
+                logger.info(f"Event type: {event_type}")
+                
+                if event_type == "start":
+                    logger.info("Start event - odesílám odpověď")
+                    response = {
+                        "event": "test_response",
+                        "message": "Test WebSocket funguje!"
+                    }
+                    await websocket.send_text(json.dumps(response))
+                    
+                elif event_type == "media":
+                    logger.info("Media event - ignoruji")
+                    
+                elif event_type == "stop":
+                    logger.info("Stop event - ukončuji")
+                    break
+                    
+            except json.JSONDecodeError as e:
+                logger.error(f"Chyba při parsování JSON: {e}")
+                
+    except WebSocketDisconnect:
+        logger.info("WebSocket odpojení")
+    except Exception as e:
+        logger.error(f"Chyba v test handleru: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+    finally:
+        logger.info("=== AUDIO TEST WEBSOCKET HANDLER UKONČEN ===")
+
 @app.websocket("/audio")
 async def audio_stream(websocket: WebSocket):
     await websocket.accept()
