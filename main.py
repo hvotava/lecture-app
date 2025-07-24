@@ -5,7 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import logging
 from twilio.twiml.voice_response import VoiceResponse, Connect, Stream
-from app.models import Attempt, Lesson, User, Answer
+from app.models import Attempt, Lesson, User, Answer, Base
+from sqlalchemy.orm import mapped_column
 from fastapi import Query
 from fastapi.templating import Jinja2Templates
 from fastapi import APIRouter, Form, status, Depends
