@@ -388,154 +388,214 @@ def admin_create_lesson_0(request: Request):
         # 30 základních otázek z obráběcích kapalin a servisu
         questions = [
             {
+                "number": 1,
                 "question": "K čemu slouží obráběcí kapaliny při obrábění kovů?",
                 "correct_answer": "K chlazení, mazání a odvodu třísek",
-                "keywords": ["chlazení", "mazání", "třísky", "odvod"]
+                "keywords": ["chlazení", "mazání", "třísky", "odvod"],
+                "enabled": True
             },
             {
+                "number": 2,
                 "question": "Jaké jsou hlavní typy obráběcích kapalin?",
                 "correct_answer": "Vodní roztoky, oleje a emulze",
-                "keywords": ["vodní", "oleje", "emulze", "typy"]
+                "keywords": ["vodní", "oleje", "emulze", "typy"],
+                "enabled": True
             },
             {
+                "number": 3,
                 "question": "Proč je důležité pravidelně kontrolovat koncentraci emulze?",
                 "correct_answer": "Pro zajištění správné funkce a předcházení bakteriálnímu růstu",
-                "keywords": ["koncentrace", "funkce", "bakterie", "kontrola"]
+                "keywords": ["koncentrace", "funkce", "bakterie", "kontrola"],
+                "enabled": True
             },
             {
+                "number": 4,
                 "question": "Jak se měří koncentrací obráběcí emulze?",
                 "correct_answer": "Refraktometrem nebo titrací",
-                "keywords": ["refraktometr", "titrace", "měření"]
+                "keywords": ["refraktometr", "titrace", "měření"],
+                "enabled": True
             },
             {
+                "number": 5,
                 "question": "Jaká je optimální koncentrace pro většinu obráběcích emulzí?",
                 "correct_answer": "3-8 procent",
-                "keywords": ["3", "8", "procent", "koncentrace"]
+                "keywords": ["3", "8", "procent", "koncentrace"],
+                "enabled": True
             },
             {
+                "number": 6,
                 "question": "Co způsobuje pěnění obráběcích kapalin?",
                 "correct_answer": "Vysoká rychlost oběhu, kontaminace nebo špatná koncentrace",
-                "keywords": ["pěnění", "rychlost", "kontaminace", "koncentrace"]
+                "keywords": ["pěnění", "rychlost", "kontaminace", "koncentrace"],
+                "enabled": True
             },
             {
+                "number": 7,
                 "question": "Jak často se má měnit obráběcí kapalina?",
                 "correct_answer": "Podle stavu kapaliny, obvykle každé 2-6 měsíců",
-                "keywords": ["měnit", "stav", "měsíc", "pravidelně"]
+                "keywords": ["měnit", "stav", "měsíc", "pravidelně"],
+                "enabled": True
             },
             {
+                "number": 8,
                 "question": "Jaké jsou příznaky zkažené obráběcí kapaliny?",
                 "correct_answer": "Zápach, změna barvy, pěnění nebo růst bakterií",
-                "keywords": ["zápach", "barva", "pěnění", "bakterie"]
+                "keywords": ["zápach", "barva", "pěnění", "bakterie"],
+                "enabled": True
             },
             {
+                "number": 9,
                 "question": "Co je to pH obráběcí kapaliny a jaká má být hodnota?",
                 "correct_answer": "Míra kyselosti, optimálně 8,5-9,5",
-                "keywords": ["pH", "kyselost", "8,5", "9,5"]
+                "keywords": ["pH", "kyselost", "8,5", "9,5"],
+                "enabled": True
             },
             {
+                "number": 10,
                 "question": "Proč je důležité udržovat správné pH?",
                 "correct_answer": "Zabraňuje korozi a růstu bakterií",
-                "keywords": ["koroze", "bakterie", "ochrana"]
+                "keywords": ["koroze", "bakterie", "ochrana"],
+                "enabled": True
             },
             {
+                "number": 11,
                 "question": "Jak se připravuje emulze z koncentrátu?",
                 "correct_answer": "Koncentrát se přidává do vody, nikdy naopak",
-                "keywords": ["koncentrát", "voda", "příprava", "pořadí"]
+                "keywords": ["koncentrát", "voda", "příprava", "pořadí"],
+                "enabled": True
             },
             {
+                "number": 12,
                 "question": "Jaká je funkce biocidů v obráběcích kapalinách?",
                 "correct_answer": "Zabíjejí bakterie a houby",
-                "keywords": ["biocidy", "bakterie", "houby", "dezinfekce"]
+                "keywords": ["biocidy", "bakterie", "houby", "dezinfekce"],
+                "enabled": True
             },
             {
+                "number": 13,
                 "question": "Co způsobuje korozi na obráběcích strojích?",
                 "correct_answer": "Nízké pH, kontaminace nebo stará kapalina",
-                "keywords": ["koroze", "pH", "kontaminace", "stará"]
+                "keywords": ["koroze", "pH", "kontaminace", "stará"],
+                "enabled": True
             },
             {
+                "number": 14,
                 "question": "Jak se testuje kvalita obráběcí kapaliny?",
                 "correct_answer": "Měření pH, koncentrace, čistoty a mikrobiologie",
-                "keywords": ["pH", "koncentrace", "čistota", "mikrobiologie"]
+                "keywords": ["pH", "koncentrace", "čistota", "mikrobiologie"],
+                "enabled": True
             },
             {
+                "number": 15,
                 "question": "Jaké jsou bezpečnostní opatření při práci s obráběcími kapalinami?",
                 "correct_answer": "Ochranné rukavice, brýle a větrání",
-                "keywords": ["rukavice", "brýle", "větrání", "ochrana"]
+                "keywords": ["rukavice", "brýle", "větrání", "ochrana"],
+                "enabled": True
             },
             {
+                "number": 16,
                 "question": "Co je filtrace obráběcích kapalin?",
                 "correct_answer": "Odstranění nečistot a částic z kapaliny",
-                "keywords": ["filtrace", "nečistoty", "částice", "čištění"]
+                "keywords": ["filtrace", "nečistoty", "částice", "čištění"],
+                "enabled": True
             },
             {
+                "number": 17,
                 "question": "Proč se obráběcí kapaliny recyklují?",
                 "correct_answer": "Kvůli úspoře nákladů a ochraně životního prostředí",
-                "keywords": ["recyklace", "úspora", "prostředí", "náklady"]
+                "keywords": ["recyklace", "úspora", "prostředí", "náklady"],
+                "enabled": True
             },
             {
+                "number": 18,
                 "question": "Jaká je role aditiv v obráběcích kapalinách?",
                 "correct_answer": "Zlepšují vlastnosti jako mazání, ochranu před korozí",
-                "keywords": ["aditiva", "mazání", "koroze", "vlastnosti"]
+                "keywords": ["aditiva", "mazání", "koroze", "vlastnosti"],
+                "enabled": True
             },
             {
+                "number": 19,
                 "question": "Co je to EP přísada?",
                 "correct_answer": "Extreme Pressure - přísada pro vysoké tlaky",
-                "keywords": ["EP", "extreme", "pressure", "tlak"]
+                "keywords": ["EP", "extreme", "pressure", "tlak"],
+                "enabled": True
             },
             {
+                "number": 20,
                 "question": "Jak se likvidují použité obráběcí kapaliny?",
                 "correct_answer": "Jako nebezpečný odpad ve specializovaných firmách",
-                "keywords": ["likvidace", "nebezpečný", "odpad", "specializované"]
+                "keywords": ["likvidace", "nebezpečný", "odpad", "specializované"],
+                "enabled": True
             },
             {
+                "number": 21,
                 "question": "Co způsobuje bakteriální růst v obráběcích kapalinách?",
                 "correct_answer": "Vysoká teplota, nízké pH nebo kontaminace",
-                "keywords": ["bakterie", "teplota", "pH", "kontaminace"]
+                "keywords": ["bakterie", "teplota", "pH", "kontaminace"],
+                "enabled": True
             },
             {
+                "number": 22,
                 "question": "Jaké jsou výhody syntetických obráběcích kapalin?",
                 "correct_answer": "Delší životnost, lepší čistota a stabilita",
-                "keywords": ["syntetické", "životnost", "čistota", "stabilita"]
+                "keywords": ["syntetické", "životnost", "čistota", "stabilita"],
+                "enabled": True
             },
             {
+                "number": 23,
                 "question": "Co je to mazací film?",
                 "correct_answer": "Tenká vrstva kapaliny mezi nástrojem a obrobkem",
-                "keywords": ["mazací", "film", "vrstva", "nástroj"]
+                "keywords": ["mazací", "film", "vrstva", "nástroj"],
+                "enabled": True
             },
             {
+                "number": 24,
                 "question": "Proč je důležité chlazení při obrábění?",
                 "correct_answer": "Zabraňuje přehřátí nástroje a obrobku",
-                "keywords": ["chlazení", "přehřátí", "nástroj", "obrobek"]
+                "keywords": ["chlazení", "přehřátí", "nástroj", "obrobek"],
+                "enabled": True
             },
             {
+                "number": 25,
                 "question": "Co je to tramp oil?",
                 "correct_answer": "Cizí olej kontaminující obráběcí kapalinu",
-                "keywords": ["tramp", "oil", "cizí", "kontaminace"]
+                "keywords": ["tramp", "oil", "cizí", "kontaminace"],
+                "enabled": True
             },
             {
+                "number": 26,
                 "question": "Jak se odstraňuje tramp oil?",
                 "correct_answer": "Skimmerem nebo separátorem oleje",
-                "keywords": ["skimmer", "separátor", "odstranění"]
+                "keywords": ["skimmer", "separátor", "odstranění"],
+                "enabled": True
             },
             {
+                "number": 27,
                 "question": "Jaká je optimální teplota obráběcích kapalin?",
                 "correct_answer": "20-35 stupňů Celsia",
-                "keywords": ["teplota", "20", "35", "Celsius"]
+                "keywords": ["teplota", "20", "35", "Celsius"],
+                "enabled": True
             },
             {
+                "number": 28,
                 "question": "Co je to centrální systém obráběcích kapalin?",
                 "correct_answer": "Systém zásobující více strojů z jednoho zdroje",
-                "keywords": ["centrální", "systém", "více", "strojů"]
+                "keywords": ["centrální", "systém", "více", "strojů"],
+                "enabled": True
             },
             {
+                "number": 29,
                 "question": "Proč se kontroluje tvrdost vody pro přípravu emulzí?",
                 "correct_answer": "Tvrdá voda může způsobit nestabilitu emulze",
-                "keywords": ["tvrdost", "voda", "nestabilita", "emulze"]
+                "keywords": ["tvrdost", "voda", "nestabilita", "emulze"],
+                "enabled": True
             },
             {
+                "number": 30,
                 "question": "Co jsou to MWF (Metalworking Fluids)?",
                 "correct_answer": "Obecný název pro všechny obráběcí kapaliny",
-                "keywords": ["MWF", "metalworking", "fluids", "obecný"]
+                "keywords": ["MWF", "metalworking", "fluids", "obecný"],
+                "enabled": True
             }
         ]
         
@@ -628,39 +688,93 @@ def admin_edit_lesson_get(request: Request, id: int = Path(...)):
     if not lesson:
         session.close()
         return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
+    
+    # Pro Lekci 0 a nové lekce s otázkami použij novou template
+    if lesson.title.startswith("Lekce 0") or (lesson.questions and isinstance(lesson.questions, list) and len(lesson.questions) > 0 and isinstance(lesson.questions[0], dict)):
+        session.close()
+        return templates.TemplateResponse("lessons/edit.html", {"request": request, "lesson": lesson})
+    
+    # Pro staré lekce použij původní template
     form = {"title": lesson.title, "language": lesson.language, "script": lesson.script, "questions": lesson.questions, "title.errors": [], "language.errors": [], "script.errors": [], "questions.errors": []}
     session.close()
     return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
 
 @admin_router.post("/lessons/{id}/edit", response_class=HTMLResponse)
-def admin_edit_lesson_post(request: Request, id: int = Path(...), title: str = Form(...), language: str = Form(...), script: str = Form(...), questions: str = Form("")):
+async def admin_edit_lesson_post(request: Request, id: int = Path(...)):
     session = SessionLocal()
     lesson = session.query(Lesson).get(id)
     if not lesson:
         session.close()
         return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
-    errors = {"title": [], "language": [], "script": [], "questions": []}
-    if not title:
-        errors["title"].append("Název je povinný.")
-    if language not in ["cs", "en"]:
-        errors["language"].append("Neplatný jazyk.")
-    if not script:
-        errors["script"].append("Skript je povinný.")
-    if any(errors.values()):
-        form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": errors["title"], "language.errors": errors["language"], "script.errors": errors["script"], "questions.errors": errors["questions"]}
-        session.close()
-        return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
-    lesson.title = title
-    lesson.language = language
-    lesson.script = script
-    lesson.questions = questions
+    
     try:
+        form_data = await request.form()
+        
+        # Pro Lekci 0 a nové lekce s otázkami
+        if lesson.title.startswith("Lekce 0") or (lesson.questions and isinstance(lesson.questions, list) and len(lesson.questions) > 0 and isinstance(lesson.questions[0], dict)):
+            title = form_data.get("title", "")
+            description = form_data.get("description", "")
+            level = form_data.get("level", "beginner")
+            enabled_questions = form_data.getlist("enabled_questions")
+            
+            if not title:
+                session.close()
+                return templates.TemplateResponse("lessons/edit.html", {
+                    "request": request, 
+                    "lesson": lesson, 
+                    "error": "Název je povinný."
+                })
+            
+            # Aktualizuj základní info
+            lesson.title = title
+            lesson.description = description
+            lesson.level = level
+            
+            # Aktualizuj enabled stav otázek
+            if lesson.questions and isinstance(lesson.questions, list):
+                for i, question in enumerate(lesson.questions):
+                    if isinstance(question, dict):
+                        question['enabled'] = str(i) in enabled_questions
+            
+            session.commit()
+            logger.info(f"✅ Lekce {lesson.id} aktualizována: {len(enabled_questions)} aktivních otázek")
+            session.close()
+            return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
+        
+        # Pro staré lekce - původní logika
+        title = form_data.get("title", "")
+        language = form_data.get("language", "cs")
+        script = form_data.get("script", "")
+        questions = form_data.get("questions", "")
+        
+        errors = {"title": [], "language": [], "script": [], "questions": []}
+        if not title:
+            errors["title"].append("Název je povinný.")
+        if language not in ["cs", "en"]:
+            errors["language"].append("Neplatný jazyk.")
+        if not script:
+            errors["script"].append("Skript je povinný.")
+        
+        if any(errors.values()):
+            form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": errors["title"], "language.errors": errors["language"], "script.errors": errors["script"], "questions.errors": errors["questions"]}
+            session.close()
+            return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
+        
+        lesson.title = title
+        lesson.language = language
+        lesson.script = script
+        lesson.questions = questions
         session.commit()
+        
     except Exception as e:
         session.rollback()
-        form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": [str(e)], "language.errors": [], "script.errors": [], "questions.errors": []}
+        logger.error(f"❌ Chyba při editaci lekce {id}: {e}")
         session.close()
-        return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
+        return templates.TemplateResponse("lessons/edit.html", {
+            "request": request, 
+            "lesson": lesson, 
+            "error": f"Chyba při ukládání: {str(e)}"
+        })
     session.close()
     return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
 
@@ -1113,8 +1227,49 @@ async def process_speech(request: Request):
                 
                 logger.info("🤖 Generuji odpověď pomocí OpenAI GPT...")
                 
+                # Získej attempt_id z query parametrů pro načtení správné lekce
+                attempt_id = request.query_params.get('attempt_id')
+                current_lesson = None
+                enabled_questions = []
+                
+                if attempt_id:
+                    try:
+                        session = SessionLocal()
+                        attempt = session.query(Attempt).get(int(attempt_id))
+                        if attempt and attempt.lesson:
+                            current_lesson = attempt.lesson
+                            
+                            # Filtruj pouze ENABLED otázky
+                            if (current_lesson.questions and 
+                                isinstance(current_lesson.questions, list)):
+                                enabled_questions = [
+                                    q for q in current_lesson.questions 
+                                    if isinstance(q, dict) and q.get('enabled', True)
+                                ]
+                                logger.info(f"🎯 Nalezeno {len(enabled_questions)} aktivních otázek z {len(current_lesson.questions)} celkem")
+                            else:
+                                logger.warning("⚠️ Lekce nemá otázky nebo jsou v nesprávném formátu")
+                        session.close()
+                    except Exception as e:
+                        logger.error(f"❌ Chyba při načítání lekce: {e}")
+                        if 'session' in locals():
+                            session.close()
+                
+                # Vyber náhodnou otázku z ENABLED otázek pro kontext
+                question_context = ""
+                if enabled_questions:
+                    import random
+                    random_question = random.choice(enabled_questions)
+                    question_context = f"""
+                    
+AKTUÁLNÍ TESTOVACÍ OTÁZKA (pro kontext):
+Otázka: {random_question.get('question', '')}
+Správná odpověď: {random_question.get('correct_answer', '')}
+Klíčová slova: {', '.join(random_question.get('keywords', []))}
+                    """
+                
                 # Rozšířený prompt pro vyhodnocení odpovědí
-                system_prompt = """Jsi AI asistent pro výuku obráběcích kapalin a servisu. Komunikuješ POUZE v češtině.
+                system_prompt = f"""Jsi AI asistent pro výuku obráběcích kapalin a servisu. Komunikuješ POUZE v češtině.
 
 🎯 DŮLEŽITÉ: VŽDY MUSÍŠ PŘIDAT SKÓRE NA KONEC!
 
@@ -1123,6 +1278,11 @@ INSTRUKCE PRO VYHODNOCENÍ:
 2. Poskytni krátkou zpětnou vazbu (max 2 věty)
 3. Na konci odpovědi POVINNĚ přidej skóre ve formátu: [SKÓRE: XX%]
 
+TESTOVACÍ DATABÁZE ({len(enabled_questions)} aktivních otázek):
+Používáš pouze otázky označené jako "enabled" v lekci. Celkem máš k dispozici {len(enabled_questions)} aktivních otázek z oboru obráběcích kapalin.
+
+{question_context}
+
 PŘÍKLADY ODPOVĚDÍ:
 - "Výborně! Obráběcí kapaliny skutečně slouží k chlazení a mazání. [SKÓRE: 95%]"
 - "Částečně správně. Zapomněl jste na funkci odvodu třísek. [SKÓRE: 60%]"
@@ -1130,11 +1290,22 @@ PŘÍKLADY ODPOVĚDÍ:
 
 ⚠️ KRITICKÉ: Bez [SKÓRE: XX%] na konci se systém pokazí!"""
 
+                # Připrav kontext pro GPT s informacemi o enabled otázkách
+                user_prompt = f"Student odpověděl: '{speech_result}'. Vyhodnoť jeho odpověď a poskytni zpětnou vazbu."
+                
+                if enabled_questions:
+                    # Přidej informace o všech enabled otázkách pro lepší kontext
+                    questions_info = "\n".join([
+                        f"- {q.get('question', '')} (správná odpověď: {q.get('correct_answer', '')})"
+                        for q in enabled_questions[:5]  # Omez na prvních 5 pro úsporu tokenů
+                    ])
+                    user_prompt += f"\n\nKONTEXT - Aktivní otázky v této lekci:\n{questions_info}"
+
                 gpt_response = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"Student odpověděl: '{speech_result}'. Vyhodnoť jeho odpověď a poskytni zpětnou vazbu."}
+                        {"role": "user", "content": user_prompt}
                     ],
                     max_tokens=150,
                     temperature=0.7
@@ -1162,6 +1333,9 @@ PŘÍKLADY ODPOVĚDÍ:
                     user = session.query(User).order_by(User.id.desc()).first()
                     logger.info(f"👤 Načten uživatel: {user.name if user else 'None'}, aktuální lekce: {user.current_lesson_level if user else 'N/A'}")
                     
+                    # Informace o enabled otázkách pro uživatele
+                    enabled_info = f" (testováno z {len(enabled_questions)} aktivních otázek)" if enabled_questions else ""
+                    
                     if user and current_score >= 90 and user.current_lesson_level == 0:
                         # Postup z vstupního testu do lekce 1
                         user.current_lesson_level = 1
@@ -1179,14 +1353,14 @@ PŘÍKLADY ODPOVĚDÍ:
                         session.add(progress)
                         session.commit()
                         
-                        logger.info(f"🎉 Uživatel {user.name} postoupil do lekce 1 se skóre {current_score}%")
+                        logger.info(f"🎉 Uživatel {user.name} postoupil do lekce 1 se skóre {current_score}% ({len(enabled_questions)} aktivních otázek)")
                         
                         # Přidej gratulaci do odpovědi
-                        clean_answer += f" Gratulujeme! Dosáhli jste {current_score}% a postoupili do Lekce 1!"
+                        clean_answer += f" Gratulujeme! Dosáhli jste {current_score}%{enabled_info} a postoupili do Lekce 1!"
                         
                     elif user and current_score < 90 and user.current_lesson_level == 0:
-                        clean_answer += f" Dosáhli jste {current_score}%. Pro postup potřebujete alespoň 90%. Zkuste to znovu!"
-                        logger.info(f"📊 Uživatel {user.name} nedosáhl 90%, zůstává na lekci 0")
+                        clean_answer += f" Dosáhli jste {current_score}%{enabled_info}. Pro postup potřebujete alespoň 90%. Zkuste to znovu!"
+                        logger.info(f"📊 Uživatel {user.name} nedosáhl 90%, zůstává na lekci 0 ({len(enabled_questions)} aktivních otázek)")
                         
                 except Exception as db_error:
                     logger.error(f"❌ Chyba při aktualizaci pokroku: {db_error}")
