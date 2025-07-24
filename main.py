@@ -502,10 +502,54 @@ async def stream_callback(request: Request):
     # Pouze HTTP 200 odpověď, žádné TwiML
     return {"status": "ok"}
 
-@app.post("/voice/")
-async def voice(request: Request, attempt_id: str = Query(None)):
-    logger.info("Přijat Twilio webhook na /voice/")
+@app.post("/voice/call")
+async def voice_call_handler(request: Request):
+    """Handler pro Twilio Voice webhook na /voice/call endpoint"""
+    logger.info("Přijat Twilio webhook na /voice/call")
+    
+    # Získáme form data z Twilio
+    form_data = await request.form()
+    
+    # Logování důležitých informací
+    from_number = form_data.get('From', 'Unknown')
+    to_number = form_data.get('To', 'Unknown') 
+    call_sid = form_data.get('CallSid', 'Unknown')
+    
+    logger.info(f"Call SID: {call_sid}")
+    logger.info(f"From: {from_number} -> To: {to_number}")
+    
+    # Zkusíme získat attempt_id z query parametrů
+    attempt_id = request.query_params.get('attempt_id')
     logger.info(f"Attempt ID: {attempt_id}")
+    
+    # Vytvoříme TwiML odpověď
+    twiml_response = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
+    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
+    <Start>
+        <Stream 
+            name="ai_assistant_stream"
+            url="wss://lecture-app-production.up.railway.app/audio" 
+            track="both_tracks" 
+            statusCallback="https://lecture-app-production.up.railway.app/stream-callback"
+            statusCallbackMethod="POST"
+        />
+    </Start>
+    <Pause length="3600"/>
+</Response>'''
+    
+    logger.info(f"TwiML odpověď z /voice/call: {twiml_response}")
+    
+    return Response(
+        content=twiml_response,
+        media_type="application/xml"
+    )
+
+@app.post("/voice/")
+async def voice_handler(request: Request):
+    logger.info("Přijat Twilio webhook na /voice/")
+    logger.info(f"Attempt ID: {request.query_params.get('attempt_id')}")
     
     # Získání parametrů hovoru
     form = await request.form()
@@ -639,10 +683,97 @@ async def audio_stream_test(websocket: WebSocket):
 
 @app.websocket("/audio")
 async def audio_stream(websocket: WebSocket):
+    """AI hlasový asistent s OpenAI Realtime API - DEBUGGING VERZE"""
     await websocket.accept()
     logger.info("=== AUDIO WEBSOCKET HANDLER SPUŠTĚN ===")
     
-    # Připojení k OpenAI Realtime API
+    # Dočasně vypneme OpenAI připojení pro debugging
+    ENABLE_OPENAI = False
+    
+    if not ENABLE_OPENAI:
+        logger.info("🧪 DEBUG MODE: OpenAI připojení vypnuto")
+        
+        # Jednoduchý test handler
+        try:
+            stream_sid = None
+            
+            while True:
+                data = await websocket.receive_text()
+                try:
+                    msg = json.loads(data)
+                    event = msg.get("event")
+                    
+                    if event == "start":
+                        logger.info("=== MEDIA STREAM START EVENT PŘIJAT! ===")
+                        stream_sid = msg.get("streamSid")
+                        logger.info(f"Stream SID: {stream_sid}")
+                        
+                        # Pošleme test audio zprávu
+                        await asyncio.sleep(1)  # Krátká pauza
+                        
+                        # Simulace TTS odpovědi
+                        test_message = "Ahoj! Jsem AI asistent. Slyšíte mě?"
+                        logger.info(f"🎤 Odesílám test zprávu: {test_message}")
+                        
+                        # Vytvoříme falešný audio payload (ticho)
+                        import base64
+                        silence_audio = b'\x00' * 160  # 160 bajtů ticha pro G.711 μ-law
+                        silence_b64 = base64.b64encode(silence_audio).decode()
+                        
+                        # Pošleme několik audio chunků
+                        for i in range(10):
+                            media_message = {
+                                "event": "media",
+                                "streamSid": stream_sid,
+                                "media": {
+                                    "payload": silence_b64
+                                }
+                            }
+                            await websocket.send_text(json.dumps(media_message))
+                            await asyncio.sleep(0.1)  # 100ms mezi chunky
+                        
+                        logger.info("✅ Test audio chunky odeslány")
+                        
+                    elif event == "media":
+                        payload = msg["media"]["payload"]
+                        track = msg["media"]["track"]
+                        seq = msg.get("sequenceNumber", "?")
+                        
+                        if track == "inbound":
+                            logger.info(f"📥 Přijat audio chunk #{seq} od uživatele (délka: {len(payload)})")
+                            
+                            # Simulace zpracování - echo odpověď
+                            if int(seq) % 50 == 0:  # Každý 50. chunk
+                                echo_message = {
+                                    "event": "media", 
+                                    "streamSid": stream_sid,
+                                    "media": {
+                                        "payload": payload  # Echo stejného audia zpět
+                                    }
+                                }
+                                await websocket.send_text(json.dumps(echo_message))
+                                logger.info(f"🔄 Echo odpověď odeslána pro chunk #{seq}")
+                        
+                    elif event == "stop":
+                        logger.info("Media Stream ukončen")
+                        break
+                        
+                except json.JSONDecodeError as e:
+                    logger.error(f"Neplatný JSON z Twilia: {e}")
+                except Exception as e:
+                    logger.error(f"Chyba při zpracování zprávy: {e}")
+                    
+        except WebSocketDisconnect:
+            logger.info("WebSocket /audio odpojen")
+        except Exception as e:
+            logger.error(f"Chyba ve WebSocket /audio: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+        finally:
+            logger.info("=== AUDIO WEBSOCKET HANDLER UKONČEN ===")
+            return
+    
+    # Původní kód s OpenAI (zatím vypnutý)
     openai_api_key = os.getenv('OPENAI_API_KEY')
     if not openai_api_key:
         logger.error("OPENAI_API_KEY není nastavena")
