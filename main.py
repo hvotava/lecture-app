@@ -1540,8 +1540,20 @@ async def process_speech(request: Request):
                                 attempt_id=int(attempt_id) if attempt_id else None
                             )
                             
-                            # Zkontroluj, jestli je to první otázka (uvítání)
-                            if test_session.current_question_index == 0 and not test_session.answers:
+                            # ROZHODNUTÍ: První otázka nebo vyhodnocení odpovědi?
+                            # Pokud uživatel říká smysluplnou odpověď (>5 slov), určitě odpovídá na otázku
+                            speech_words = speech_result.strip().split()
+                            is_answering_question = len(speech_words) >= 3  # 3+ slova = odpověď na otázku
+                            
+                            # První otázka pouze pokud je test na začátku A uživatel neodpovídá
+                            is_first_question = (test_session.current_question_index == 0 and 
+                                               len(test_session.answers) == 0 and 
+                                               not is_answering_question)
+                            
+                            logger.info(f"🔍 Analýza vstupu: '{speech_result}' ({len(speech_words)} slov)")
+                            logger.info(f"🔍 is_answering_question: {is_answering_question}, is_first_question: {is_first_question}")
+                            
+                            if is_first_question:
                                 # PRVNÍ OTÁZKA - Položi ji
                                 current_question = get_current_question(test_session)
                                 if current_question:
