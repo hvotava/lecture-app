@@ -3,7 +3,12 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Lekce</h1>
-    <a href="{{ request.url_for('admin_new_lesson_get') }}" class="btn btn-primary">Nová lekce</a>
+    <div>
+        <a href="{{ request.url_for('admin_create_lesson_0') }}" class="btn btn-warning me-2">
+            📝 Vytvořit Lekci 0 (Vstupní test)
+        </a>
+        <a href="{{ request.url_for('admin_new_lesson_get') }}" class="btn btn-primary">Nová lekce</a>
+    </div>
 </div>
 
 <div class="table-responsive">
@@ -11,6 +16,8 @@
         <thead>
             <tr>
                 <th>Název</th>
+                <th>Typ</th>
+                <th>Otázky</th>
                 <th>Jazyk</th>
                 <th>Vytvořeno</th>
                 <th>Akce</th>
@@ -31,5 +38,47 @@
             {% endfor %}
         </tbody>
     </table>
+</div>
+
+{% if lessons|length == 0 %}
+<div class="alert alert-info mt-4">
+    <h5><i class="fas fa-info-circle"></i> Jak začít?</h5>
+    <p>Zatím nemáte žádné lekce. Začněte vytvořením <strong>Lekce 0 (Vstupní test)</strong>:</p>
+    <ol>
+        <li>Klikněte na tlačítko <strong>"📝 Vytvořit Lekci 0"</strong> výše</li>
+        <li>Automaticky se vytvoří 30 otázek z obráběcích kapalin</li>
+        <li>Poté můžete otázky editovat a zaškrtávat které chcete testovat</li>
+        <li>Uživatelé budou muset dosáhnout 90% pro postup do Lekce 1</li>
+    </ol>
+</div>
+{% endif %}
+
+<div class="mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h5>📊 Legenda systému lekcí</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Typy lekcí:</h6>
+                    <ul class="list-unstyled">
+                        <li><span class="badge bg-warning text-dark">Vstupní test</span> - Lekce 0 s 30 otázkami</li>
+                        <li><span class="badge bg-success">Začátečník</span> - Základní lekce</li>
+                        <li><span class="badge bg-primary">Pokročilý</span> - Pokročilé lekce</li>
+                        <li><span class="badge bg-danger">Expert</span> - Expertní lekce</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>Funkce:</h6>
+                    <ul class="list-unstyled">
+                        <li>✏️ <strong>Editovat otázky:</strong> Zaškrtávání aktivních otázek</li>
+                        <li>📊 <strong>Počet otázek:</strong> Aktivní/Celkem</li>
+                        <li>🎯 <strong>AI testování:</strong> Jen z aktivních otázek</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %} 
