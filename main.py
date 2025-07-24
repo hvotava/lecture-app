@@ -641,25 +641,80 @@ async def process_speech(request: Request):
     response = VoiceResponse()
     
     if speech_result:
-        # Zde by bylo volání OpenAI API pro odpověď
-        response.say(
-            f"Rozuměl jsem vám. Řekl jste: {speech_result}. Toto je testovací odpověď.",
+        # OpenAI GPT odpověď
+        try:
+            openai_api_key = os.getenv('OPENAI_API_KEY')
+            if openai_api_key:
+                import openai
+                client = openai.OpenAI(api_key=openai_api_key)
+                
+                logger.info("🤖 Generuji odpověď pomocí OpenAI GPT...")
+                
+                gpt_response = client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": """Jsi AI asistent pro výuku jazyků. Komunikuješ POUZE v češtině. 
+                            Jsi trpělivý, povzbuzující a pomáháš studentům s učením. 
+                            Odpovídej stručně a jasně (max 2-3 věty). 
+                            Pokud student položí otázku, odpověz užitečně a zeptej se na další otázku."""
+                        },
+                        {
+                            "role": "user", 
+                            "content": speech_result
+                        }
+                    ],
+                    max_tokens=150,
+                    temperature=0.7
+                )
+                
+                ai_answer = gpt_response.choices[0].message.content
+                logger.info(f"🤖 OpenAI odpověď: {ai_answer}")
+                
+                response.say(
+                    ai_answer,
+                    language="cs-CZ",
+                    rate="0.9",
+                    voice="Google.cs-CZ-Standard-A"
+                )
+            else:
+                logger.warning("⚠️ OPENAI_API_KEY není nastaven")
+                response.say(
+                    f"Rozuměl jsem vám. Řekl jste: {speech_result}. OpenAI není nakonfigurováno.",
+                    language="cs-CZ",
+                    rate="0.9",
+                    voice="Google.cs-CZ-Standard-A"
+                )
+        except Exception as e:
+            logger.error(f"❌ Chyba při volání OpenAI: {e}")
+            response.say(
+                f"Rozuměl jsem vám. Řekl jste: {speech_result}. Omlouvám se, došlo k technické chybě.",
+                language="cs-CZ",
+                rate="0.9",
+                voice="Google.cs-CZ-Standard-A"
+            )
+        
+        # Další kolo konverzace
+        gather = response.gather(
+            input='speech',
+            timeout=15,  # Delší timeout pro pohodlnější konverzaci
+            action='/voice/process',
+            method='POST',
+            language='cs-CZ',
+            speech_model='phone_call'
+        )
+        
+        gather.say(
+            "Máte další otázku nebo chcete pokračovat?",
             language="cs-CZ",
             rate="0.9",
             voice="Google.cs-CZ-Standard-A"
         )
         
-        # Další kolo konverzace
-        gather = response.gather(
-            input='speech',
-            timeout=10,
-            action='/voice/process',
-            method='POST',
-            language='cs-CZ'
-        )
-        
-        gather.say(
-            "Máte další otázku?",
+        # Fallback pro timeout
+        response.say(
+            "Děkuji za rozhovor. Hovor ukončuji. Na shledanou!",
             language="cs-CZ",
             rate="0.9",
             voice="Google.cs-CZ-Standard-A"
