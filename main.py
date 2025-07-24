@@ -1482,6 +1482,10 @@ async def process_speech(request: Request):
     
     response = VoiceResponse()
     
+    # Inicializace proměnných pro řízení toku
+    user_level = -1
+    should_continue_test = False
+    
     if speech_result:
         try:
             openai_api_key = os.getenv('OPENAI_API_KEY')
@@ -1730,9 +1734,21 @@ Odpověz mu jasně a srozumitelně v češtině."""
                         else:
                             response.say("Lekce pro vaši úroveň nebyla nalezena. Kontaktujte administrátora.", language="cs-CZ")
                     
+                    # URČENÍ DALŠÍHO KROKU PŘED ZAVŘENÍM SESSION
+                    should_continue_test = False
+                    if user_level == 0:
+                        # Zkontroluj, jestli je test stále aktivní
+                        test_session = session.query(TestSession).filter_by(
+                            user_id=current_user.id,
+                            is_completed=False
+                        ).first()
+                        should_continue_test = test_session and not test_session.is_completed
+                
                 except Exception as db_error:
                     logger.error(f"❌ Chyba při práci s databází: {db_error}")
                     response.say("Došlo k technické chybě. Zkuste to prosím později.", language="cs-CZ")
+                    should_continue_test = False
+                    user_level = -1  # Chyba
                 finally:
                     session.close()
             else:
@@ -1743,27 +1759,60 @@ Odpověz mu jasně a srozumitelně v češtině."""
             logger.error(f"❌ Chyba při zpracování: {e}")
             response.say("Došlo k neočekávané chybě.", language="cs-CZ")
         
-        # Další kolo konverzace
-        gather = response.gather(
-            input='speech',
-            timeout=15,
-            action='/voice/process',
-            method='POST',
-            language='cs-CZ',
-            speech_model='phone_call'
-        )
-        
-        gather.say(
-            "Máte další otázku nebo chcete pokračovat?",
-            language="cs-CZ",
-            rate="0.9"
-        )
-        
-        response.say(
-            "Děkuji za rozhovor. Na shledanou!",
-            language="cs-CZ",
-            rate="0.9"
-        )
+        # UPRAVENÁ LOGIKA: Další kolo konverzace pouze pokud nejsme v aktivním testu
+        if user_level == 0:
+            # VSTUPNÍ TEST - čekáme na odpověď na otázku
+            if should_continue_test:
+                # Pokud je test aktivní, přidáme gather pro odpověď na otázku
+                gather = response.gather(
+                    input='speech',
+                    timeout=30,  # Delší timeout pro zamyšlení
+                    action='/voice/process',
+                    method='POST',
+                    language='cs-CZ',
+                    speech_model='phone_call'
+                )
+                
+                gather.say(
+                    "Prosím odpovězte na otázku.",
+                    language="cs-CZ",
+                    rate="0.9"
+                )
+                
+                response.say(
+                    "Nerozuměl jsem vaší odpovědi. Zkuste to prosím znovu.",
+                    language="cs-CZ",
+                    rate="0.9"
+                )
+            else:
+                # Test dokončen nebo neaktivní
+                response.say(
+                    "Test je dokončen. Děkuji za účast!",
+                    language="cs-CZ",
+                    rate="0.9"
+                )
+        else:
+            # BĚŽNÉ LEKCE - obecná konverzace
+            gather = response.gather(
+                input='speech',
+                timeout=15,
+                action='/voice/process',
+                method='POST',
+                language='cs-CZ',
+                speech_model='phone_call'
+            )
+            
+            gather.say(
+                "Máte další otázku nebo chcete pokračovat?",
+                language="cs-CZ",
+                rate="0.9"
+            )
+            
+            response.say(
+                "Děkuji za rozhovor. Na shledanou!",
+                language="cs-CZ",
+                rate="0.9"
+            )
     else:
         response.say(
             "Nerozuměl jsem vám. Hovor ukončuji.",
