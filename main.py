@@ -867,6 +867,11 @@ async def audio_stream_test(websocket: WebSocket):
 async def audio_stream(websocket: WebSocket):
     """WebSocket endpoint pro Twilio Media Stream s robustním connection managementem"""
     
+    # PRINT pro Railway stdout
+    print("🚀 === AUDIO_STREAM FUNKCE SPUŠTĚNA! ===")
+    print(f"🔗 WebSocket client: {websocket.client}")
+    print(f"📋 WebSocket headers: {dict(websocket.headers)}")
+    
     logger.info("🚀 === AUDIO_STREAM FUNKCE SPUŠTĚNA! ===")
     logger.info(f"🔗 WebSocket client: {websocket.client}")
     logger.info(f"📋 WebSocket headers: {dict(websocket.headers)}")
@@ -874,8 +879,10 @@ async def audio_stream(websocket: WebSocket):
     # KRITICKÉ: Musíme nejprve přijmout WebSocket připojení
     try:
         await websocket.accept()
+        print("✅ DEBUG: WebSocket connection accepted.")
         logger.info("✅ DEBUG: WebSocket connection accepted.")
     except Exception as accept_error:
+        print(f"❌ CHYBA při websocket.accept(): {accept_error}")
         logger.error(f"❌ CHYBA při websocket.accept(): {accept_error}")
         return
         
