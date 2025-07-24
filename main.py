@@ -866,21 +866,32 @@ async def audio_stream_test(websocket: WebSocket):
 async def audio_stream(websocket: WebSocket):
     """WebSocket endpoint pro Twilio Media Stream s robustním connection managementem"""
     
-    # KRITICKÉ: Musíme nejprve přijmout WebSocket připojení
-    await websocket.accept()
-    logger.info("DEBUG: WebSocket connection accepted.")
+    logger.info("🚀 === AUDIO_STREAM FUNKCE SPUŠTĚNA! ===")
+    logger.info(f"🔗 WebSocket client: {websocket.client}")
+    logger.info(f"📋 WebSocket headers: {dict(websocket.headers)}")
     
+    # KRITICKÉ: Musíme nejprve přijmout WebSocket připojení
+    try:
+        await websocket.accept()
+        logger.info("✅ DEBUG: WebSocket connection accepted.")
+    except Exception as accept_error:
+        logger.error(f"❌ CHYBA při websocket.accept(): {accept_error}")
+        return
+        
     # Inicializace OpenAI klienta
     openai_api_key = os.getenv('OPENAI_API_KEY')
     if not openai_api_key:
-        logger.error("OPENAI_API_KEY není nastaven")
+        logger.error("❌ OPENAI_API_KEY není nastaven")
         await websocket.close()
         return
         
+    logger.info("🤖 Inicializuji OpenAI klienta...")
     import openai
     client = openai.OpenAI(api_key=openai_api_key)
+    logger.info("✅ OpenAI klient inicializován")
     
     # Vytvoříme nového assistanta s českými instrukcemi pro výuku jazyků
+    logger.info("🎯 Vytvářím nového Assistant...")
     try:
         assistant = client.beta.assistants.create(
             name="AI Asistent pro výuku jazyků",
@@ -905,14 +916,14 @@ STYL KOMUNIKACE:
 - Pozitivní přístup
 - Pokud student něco neví, vysvětli to jednoduše
 
-Vždy zůstávej v roli učitele jazyků a komunikuj pouze v češtině.""",
+Vždy zůstávaj v roli učitele jazyků a komunikuj pouze v češtině.""",
             model="gpt-4-1106-preview",
             tools=[]
         )
         assistant_id = assistant.id
         logger.info(f"✅ Vytvořen nový Assistant: {assistant_id}")
     except Exception as e:
-        logger.error(f"Chyba při vytváření Assistanta: {e}")
+        logger.error(f"❌ Chyba při vytváření Assistanta: {e}")
         # Fallback na existující Assistant
         assistant_id = "asst_W6120kPP1lLBzU5OQLYvH6W1"
         logger.info(f"🔄 Používám existující Assistant: {assistant_id}")
