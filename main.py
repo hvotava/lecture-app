@@ -87,6 +87,7 @@ def admin_list_users(request: Request):
             session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_number INTEGER DEFAULT 0"))
             session.execute(text("ALTER TABLE lessons ADD COLUMN required_score FLOAT DEFAULT 90.0"))
             session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_type VARCHAR(20) DEFAULT 'standard'"))
+            session.execute(text("ALTER TABLE lessons ADD COLUMN description TEXT"))
             session.commit()
             logger.info("✅ lesson sloupce přidány")
         except Exception as e:
@@ -616,6 +617,8 @@ def admin_create_lesson_0(request: Request):
         lesson = Lesson(
             title="Lekce 0: Vstupní test - Obráběcí kapaliny a servis",
             description="Základní test znalostí z oboru obráběcích kapalin a jejich servisu. Nutné dosáhnout 90% úspěšnosti pro postup do Lekce 1.",
+            language="cs",
+            script="",  # Prázdný script pro vstupní test
             questions=questions,
             level="entry_test"
         )
@@ -998,6 +1001,7 @@ def admin_migrate_db():
                 session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_number INTEGER DEFAULT 0"))
                 session.execute(text("ALTER TABLE lessons ADD COLUMN required_score FLOAT DEFAULT 90.0"))
                 session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_type VARCHAR(20) DEFAULT 'standard'"))
+                session.execute(text("ALTER TABLE lessons ADD COLUMN description TEXT"))
                 session.commit()
                 results["migrations"].append("lesson columns: ✅ přidány")
             except Exception as e:

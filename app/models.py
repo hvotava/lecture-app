@@ -22,8 +22,9 @@ class Lesson(Base):
     __tablename__ = "lessons"
     id = mapped_column(Integer, primary_key=True)
     title = mapped_column(String(200), nullable=False)
+    description = mapped_column(Text, nullable=True)  # Nový sloupec pro popis lekce
     language = mapped_column(String(2), nullable=False, default="cs")
-    script = mapped_column(Text, nullable=False)
+    script = mapped_column(Text, nullable=False, default="")  # Změněno na nullable=False s default
     questions = mapped_column(JSON, nullable=False)
     level = mapped_column(String(20), nullable=False, default="beginner")
     # lesson_number = mapped_column(Integer, nullable=False, default=0)  # DOČASNĚ VYPNUTO
