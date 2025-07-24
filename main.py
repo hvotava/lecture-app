@@ -538,7 +538,8 @@ async def voice_call_handler(request: Request):
     twiml_response = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
-    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
+    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">WebSocket test - pokud slyšíte tuto zprávu, HTTP funguje.</Say>
+    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní testuji WebSocket připojení.</Say>
     <Start>
         <Stream 
             name="ai_assistant_stream"
@@ -1344,3 +1345,17 @@ async def websocket_test(websocket: WebSocket):
         logger.info(f"🧪 Test WebSocket ukončen: {e}")
     finally:
         logger.info("🧪 === WEBSOCKET TEST UKONČEN ===") 
+
+@app.get("/websocket-status")
+async def websocket_status():
+    """Kontrola stavu WebSocket endpointů"""
+    return {
+        "message": "WebSocket status check",
+        "endpoints": {
+            "audio": "/audio",
+            "test": "/test", 
+            "audio-test": "/audio-test"
+        },
+        "railway_websocket_support": "Testing...",
+        "timestamp": "2025-07-24T19:15:00Z"
+    } 
