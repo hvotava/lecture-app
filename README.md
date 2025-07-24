@@ -6,8 +6,8 @@ Aplikace pro hlasové školení prodejců s využitím Twilio Voice a OpenAI Rea
 
 * Přidávání a správa lekcí přes webové rozhraní
 * Automatické hovory prodejcům přes Twilio Voice
-* **OpenAI Realtime API**: Real-time speech-to-speech komunikace s modelem `gpt-4.1-mini`
-* **Model**: `gpt-4.1-mini` pro všechny AI operace
+* **OpenAI Realtime API**: Real-time speech-to-speech komunikace s modelem `gpt-4o-realtime-preview-2024-10-01`
+* **Model**: `gpt-4.1-mini` pro standardní AI operace, `gpt-4o-realtime-preview` pro real-time komunikaci
 * Vyhodnocování odpovědí pomocí AI v reálném čase
 * Plánování opakování na základě výkonu (spaced repetition)
 * Možnost přerušení hovoru slovem "stop" nebo DTMF
@@ -20,7 +20,7 @@ Aplikace pro hlasové školení prodejců s využitím Twilio Voice a OpenAI Rea
 * Účet na Railway.com (pro deployment)
 * Účet na Twilio s UK/US číslem
 * API klíč pro OpenAI s přístupem k Realtime API
-* **OpenAI Realtime API**: Model `gpt-4.1-mini` musí být dostupný
+* **OpenAI Realtime API**: Model `gpt-4o-realtime-preview-2024-10-01` musí být dostupný
 
 ## Instalace na Railway.com
 
@@ -54,7 +54,7 @@ Aplikace pro hlasové školení prodejců s využitím Twilio Voice a OpenAI Rea
 ## Konfigurace OpenAI Realtime API
 
 Aplikace používá OpenAI Realtime API s těmito parametry:
-- **Model**: `gpt-4.1-mini`
+- **Model**: `gpt-4o-realtime-preview-2024-10-01`
 - **Účel**: Real-time speech-to-speech AI asistent pro výuku jazyků
 - **Formát**: G.711 μ-law (8kHz, mono) - kompatibilní s Twilio
 - **Voice Activity Detection**: Server VAD s threshold 0.5
@@ -103,7 +103,7 @@ Přes admin rozhraní:
 * **FastAPI** pro webové rozhraní a Twilio webhooky
 * **SQLAlchemy** pro práci s databází (PostgreSQL)
 * **Twilio Media Streams** pro real-time audio komunikaci
-* **OpenAI Realtime API** s modelem `gpt-4.1-mini` pro speech-to-speech
+* **OpenAI Realtime API** s modelem `gpt-4o-realtime-preview-2024-10-01` pro speech-to-speech
 * **WebSocket** komunikace pro real-time audio streaming mezi Twilio a OpenAI
 
 ## Technické detaily
@@ -122,7 +122,7 @@ Twilio Media Stream → WebSocket (/audio) → OpenAI Realtime API → WebSocket
 ### AI Pipeline (Real-time)
 1. **Příjem audio** z Twilio Media Stream
 2. **Přímé předání** do OpenAI Realtime API (`input_audio_buffer.append`)
-3. **Real-time zpracování** pomocí `gpt-4.1-mini`
+3. **Real-time zpracování** pomocí `gpt-4o-realtime-preview-2024-10-01`
 4. **Automatická detekce řeči** (Server VAD)
 5. **Streaming audio odpověď** (`response.audio.delta`)
 6. **Přímé předání** zpět do Twilio Media Stream

@@ -607,8 +607,8 @@ async def audio_stream(websocket: WebSocket):
     try:
         import websockets
         
-        # Správná URL a headers pro OpenAI Realtime API s gpt-4.1-mini
-        openai_ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4.1-mini"
+        # Správná URL a headers pro OpenAI Realtime API s gpt-4o-realtime-preview
+        openai_ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
         headers = {
             "Authorization": f"Bearer {openai_api_key}",
             "OpenAI-Beta": "realtime=v1"
@@ -673,7 +673,12 @@ Vždy zůstávaj v kontextu výuky a buď konstruktivní. Odpovídej stručně a
 
     except Exception as e:
         logger.error(f"Chyba při připojování k OpenAI Realtime API: {e}")
-        await websocket.close()
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        try:
+            await websocket.close()
+        except:
+            pass
         return
 
     # Stav konverzace
