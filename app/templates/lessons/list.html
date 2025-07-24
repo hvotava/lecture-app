@@ -26,13 +26,56 @@
         <tbody>
             {% for lesson in lessons %}
             <tr>
-                <td>{{ lesson.title }}</td>
-                <td>{{ lesson.language }}</td>
+                <td>
+                    <strong>{{ lesson.title }}</strong>
+                    {% if lesson.description %}
+                    <br><small class="text-muted">{{ lesson.description[:100] }}{% if lesson.description|length > 100 %}...{% endif %}</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if lesson.level == 'entry_test' %}
+                        <span class="badge bg-warning text-dark">Vstupní test</span>
+                    {% elif lesson.level == 'beginner' %}
+                        <span class="badge bg-success">Začátečník</span>
+                    {% elif lesson.level == 'intermediate' %}
+                        <span class="badge bg-primary">Pokročilý</span>
+                    {% elif lesson.level == 'advanced' %}
+                        <span class="badge bg-danger">Expert</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ lesson.level }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if lesson.questions and lesson.questions is iterable and lesson.questions|length > 0 %}
+                        {% if lesson.questions[0] is mapping %}
+                            {% set enabled_count = lesson.questions | selectattr('enabled', 'equalto', True) | list | length %}
+                            <span class="badge bg-info">{{ enabled_count }}/{{ lesson.questions|length }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ lesson.questions|length if lesson.questions is iterable else 'N/A' }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="badge bg-secondary">0</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="badge bg-{{ 'primary' if lesson.language == 'cs' else 'secondary' }}">
+                        {{ 'Čeština' if lesson.language == 'cs' else 'Angličtina' if lesson.language == 'en' else lesson.language }}
+                    </span>
+                </td>
                 <td>{{ lesson.created_at.strftime('%d.%m.%Y %H:%M') if lesson.created_at else '' }}</td>
                 <td>
-                    <a href="{{ request.url_for('admin_edit_lesson_get', id=lesson.id) }}" class="btn btn-sm btn-outline-primary">
-                        Upravit
-                    </a>
+                    {% if lesson.title.startswith('Lekce 0') or (lesson.questions and lesson.questions is iterable and lesson.questions|length > 0 and lesson.questions[0] is mapping) %}
+                        <a href="{{ request.url_for('admin_edit_lesson_get', id=lesson.id) }}" class="btn btn-sm btn-outline-primary">
+                            ✏️ Editovat otázky
+                        </a>
+                    {% else %}
+                        <a href="{{ request.url_for('admin_edit_lesson_get', id=lesson.id) }}" class="btn btn-sm btn-outline-primary">
+                            Upravit
+                        </a>
+                    {% endif %}
+                    <form method="post" action="{{ request.url_for('admin_delete_lesson', lesson_id=lesson.id) }}" style="display:inline;" onsubmit="return confirm('Opravdu chcete smazat tuto lekci?')">
+                        <button type="submit" class="btn btn-sm btn-outline-danger ms-1">🗑️</button>
+                    </form>
                 </td>
             </tr>
             {% endfor %}
