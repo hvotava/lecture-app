@@ -793,14 +793,25 @@ async def audio_stream(websocket: WebSocket):
         logger.info("Připojuji se k OpenAI Realtime API...")
         logger.info(f"URL: {openai_ws_url}")
         
-        # Jednoduchý přístup - použijeme websockets bez extra_headers
-        # Headers přidáme do URL jako query parametry pro kompatibilitu
+        # Pokusíme se o direct WebSocket připojení s manuálními headers
         try:
-            # Zkusíme nejdříve standardní způsob
-            openai_ws = await websockets.connect(openai_ws_url)
-            logger.info("✅ Připojení k OpenAI Realtime API úspěšné (bez headers)!")
+            import ssl
+            import websockets.legacy.client
             
-            # Pošleme session update s autorizací
+            # SSL kontext
+            ssl_context = ssl.create_default_context()
+            
+            # Pokusíme se o připojení s legacy websockets implementací
+            logger.info("Zkouším legacy websockets implementaci...")
+            
+            openai_ws = await websockets.legacy.client.connect(
+                openai_ws_url,
+                extra_headers=headers,
+                ssl=ssl_context
+            )
+            logger.info("✅ Připojení k OpenAI Realtime API úspěšné (legacy)!")
+            
+            # Pošleme session update
             session_update = {
                 "type": "session.update",
                 "session": {
