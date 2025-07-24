@@ -42,6 +42,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# DEBUG middleware pro WebSocket
+@app.middleware("http")
+async def debug_middleware(request: Request, call_next):
+    print(f"🔍 MIDDLEWARE: {request.method} {request.url}")
+    if request.url.path == "/audio":
+        print("🎯 MIDDLEWARE: Detekován /audio request!")
+    response = await call_next(request)
+    return response
+
 # Nastavení šablon
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), 'app', 'templates')
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
