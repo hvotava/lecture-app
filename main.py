@@ -651,7 +651,10 @@ def admin_create_lesson_0(request: Request):
 def admin_list_lessons(request: Request):
     session = SessionLocal()
     try:
-        # FORCE migrace pro přidání description sloupce
+        # KRITICKÁ MIGRACE - musí proběhnout PŘED načítáním dat
+        logger.info("🔧 Spouštím kritickou migraci pro lessons...")
+        
+        # 1. Přidej description sloupec
         try:
             session.execute(text("ALTER TABLE lessons ADD COLUMN description TEXT"))
             session.commit()
@@ -660,18 +663,46 @@ def admin_list_lessons(request: Request):
             if "already exists" in str(e) or "duplicate column" in str(e):
                 logger.info("✅ Description sloupec již existuje")
             else:
-                logger.warning(f"Chyba při přidávání description sloupce: {e}")
+                logger.warning(f"Chyba při přidávání description: {e}")
             session.rollback()
         
+        # 2. Přidej další potřebné sloupce pro budoucí použití
+        try:
+            session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_number INTEGER DEFAULT 0"))
+            session.execute(text("ALTER TABLE lessons ADD COLUMN required_score FLOAT DEFAULT 90.0"))
+            session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_type VARCHAR(20) DEFAULT 'standard'"))
+            session.commit()
+            logger.info("✅ Další lesson sloupce přidány")
+        except Exception as e:
+            if "already exists" in str(e) or "duplicate column" in str(e):
+                logger.info("✅ Další lesson sloupce již existují")
+            else:
+                logger.warning(f"Chyba při přidávání dalších sloupců: {e}")
+            session.rollback()
+        
+        # 3. Nyní teprve načti data
         lessons = session.query(Lesson).order_by(Lesson.id.desc()).all()
+        logger.info(f"✅ Načteno {len(lessons)} lekcí")
+        
         session.close()
         return templates.TemplateResponse("lessons/list.html", {"request": request, "lessons": lessons})
+        
     except Exception as e:
         session.close()
-        logger.error(f"❌ Chyba při načítání lekcí: {e}")
+        logger.error(f"❌ KRITICKÁ CHYBA při načítání lekcí: {e}")
+        logger.error(f"❌ Traceback: {str(e)}")
+        
+        # Zkus vytvořit tabulku znovu
+        try:
+            from app.database import Base, engine
+            Base.metadata.create_all(engine)
+            logger.info("✅ Tabulky znovu vytvořeny")
+        except Exception as create_error:
+            logger.error(f"❌ Chyba při vytváření tabulek: {create_error}")
+        
         return templates.TemplateResponse("message.html", {
             "request": request,
-            "message": f"❌ Chyba při načítání lekcí: {str(e)}",
+            "message": f"❌ Databázová chyba při načítání lekcí.\n\nChyba: {str(e)}\n\nZkuste obnovit stránku za chvíli.",
             "back_url": "/admin/users",
             "back_text": "Zpět na uživatele"
         })
