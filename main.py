@@ -839,10 +839,31 @@ async def audio_stream(websocket: WebSocket):
             stream_sid = None
             audio_buffer = bytearray()
             
-            # Úvodní zpráva
-            await asyncio.sleep(1)
+            # Úvodní zpráva - počkáme na stream_sid
             initial_message = "Ahoj! Jsem AI asistent pro výuku jazyků. Jak vám mohu pomoci?"
-            await send_tts_to_twilio(websocket, initial_message, stream_sid, client)
+            initial_message_sent = False
+            
+            # Keepalive task pro udržení WebSocket připojení
+            keepalive_task = None
+            
+            async def keepalive_sender():
+                """Periodicky odesílá keepalive zprávy"""
+                try:
+                    while True:
+                        await asyncio.sleep(10)  # Každých 10 sekund
+                        if stream_sid:
+                            # Pošleme prázdný media chunk jako keepalive
+                            keepalive_msg = {
+                                "event": "media",
+                                "streamSid": stream_sid,
+                                "media": {
+                                    "payload": ""  # Prázdný payload
+                                }
+                            }
+                            await websocket.send_text(json.dumps(keepalive_msg))
+                            logger.info("💓 Keepalive odesláno")
+                except Exception as e:
+                    logger.error(f"Keepalive chyba: {e}")
             
             while True:
                 data = await websocket.receive_text()
@@ -854,6 +875,17 @@ async def audio_stream(websocket: WebSocket):
                         logger.info("=== MEDIA STREAM START EVENT PŘIJAT! ===")
                         stream_sid = msg.get("streamSid")
                         logger.info(f"Stream SID: {stream_sid}")
+                        
+                        # Spustíme keepalive task
+                        if not keepalive_task:
+                            keepalive_task = asyncio.create_task(keepalive_sender())
+                            logger.info("💓 Keepalive task spuštěn")
+                        
+                        # Pošleme úvodní zprávu nyní když máme stream_sid
+                        if not initial_message_sent:
+                            await asyncio.sleep(2)  # Krátká pauza po uvítání
+                            await send_tts_to_twilio(websocket, initial_message, stream_sid, client)
+                            initial_message_sent = True
                         
                     elif event == "media":
                         payload = msg["media"]["payload"]
@@ -885,6 +917,11 @@ async def audio_stream(websocket: WebSocket):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
         finally:
+            # Vyčistíme keepalive task
+            if 'keepalive_task' in locals() and keepalive_task and not keepalive_task.done():
+                keepalive_task.cancel()
+                logger.info("💓 Keepalive task ukončen")
+            
             # Vyčistíme thread
             if thread:
                 try:
