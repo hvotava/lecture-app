@@ -651,7 +651,7 @@ async def process_speech(request: Request):
                 logger.info("🤖 Generuji odpověď pomocí OpenAI GPT...")
                 
                 gpt_response = client.chat.completions.create(
-                    model="gpt-4",
+                    model="gpt-4o-mini",  # Levnější než GPT-4, stále kvalitní
                     messages=[
                         {
                             "role": "system",
@@ -665,7 +665,7 @@ async def process_speech(request: Request):
                             "content": speech_result
                         }
                     ],
-                    max_tokens=150,
+                    max_tokens=100,  # Sníženo z 150 na 100 pro úsporu
                     temperature=0.7
                 )
                 
