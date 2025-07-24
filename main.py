@@ -1318,3 +1318,29 @@ if __name__ == "__main__":
         ws_ping_timeout=10,   # Timeout pro ping odpověď 10 sekund
         timeout_keep_alive=65  # Keep-alive timeout 65 sekund
     ) 
+
+@app.get("/test-websocket")
+async def test_websocket():
+    """Test endpoint pro ověření WebSocket funkčnosti"""
+    return {
+        "message": "WebSocket test endpoint",
+        "websocket_url": "wss://lecture-app-production.up.railway.app/audio",
+        "test_url": "wss://lecture-app-production.up.railway.app/audio-test"
+    } 
+
+@app.websocket("/test")
+async def websocket_test(websocket: WebSocket):
+    """Velmi jednoduchý WebSocket test"""
+    logger.info("🧪 === WEBSOCKET TEST ENDPOINT SPUŠTĚN ===")
+    await websocket.accept()
+    logger.info("🧪 WebSocket test připojení přijato")
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            logger.info(f"🧪 Test přijal: {data}")
+            await websocket.send_text(f"Echo: {data}")
+    except Exception as e:
+        logger.info(f"🧪 Test WebSocket ukončen: {e}")
+    finally:
+        logger.info("🧪 === WEBSOCKET TEST UKONČEN ===") 
