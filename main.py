@@ -28,6 +28,8 @@ import wave
 import asyncio
 import time
 import tempfile
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean, Float, ForeignKey
+from sqlalchemy.orm import relationship
 
 load_dotenv()
 
@@ -117,6 +119,32 @@ def admin_list_users(request: Request):
             logger.info("✅ user_progress tabulka vytvořena")
         except Exception as e:
             logger.warning(f"Chyba při vytváření user_progress: {e}")
+            session.rollback()
+        
+        # 4. Vytvoř test_sessions tabulku
+        try:
+            create_sessions_table = """
+            CREATE TABLE IF NOT EXISTS test_sessions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) NOT NULL,
+                lesson_id INTEGER REFERENCES lessons(id) NOT NULL,
+                attempt_id INTEGER REFERENCES attempts(id),
+                current_question_index INTEGER NOT NULL DEFAULT 0,
+                total_questions INTEGER NOT NULL DEFAULT 0,
+                questions_data JSON NOT NULL,
+                answers JSON NOT NULL DEFAULT '[]',
+                scores JSON NOT NULL DEFAULT '[]',
+                current_score FLOAT NOT NULL DEFAULT 0.0,
+                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                is_completed BOOLEAN NOT NULL DEFAULT FALSE
+            )
+            """
+            session.execute(text(create_sessions_table))
+            session.commit()
+            logger.info("✅ test_sessions tabulka vytvořena")
+        except Exception as e:
+            logger.warning(f"Chyba při vytváření test_sessions: {e}")
             session.rollback()
         
         # Bezpečné načtení uživatelů s fallback
@@ -1494,40 +1522,50 @@ async def process_speech(request: Request):
                     
                     # Najdi správnou lekci podle úrovně uživatele
                     if user_level == 0:
-                        # Vstupní test - Lekce 0
+                        # VSTUPNÍ TEST - STRUKTUROVANÉ OTÁZKY
                         target_lesson = session.query(Lesson).filter(
                             Lesson.title.contains("Lekce 0")
                         ).first()
                         
-                        if target_lesson and target_lesson.questions:
-                            # VSTUPNÍ TEST - konkrétní otázky
-                            enabled_questions = []
-                            if isinstance(target_lesson.questions, list):
-                                enabled_questions = [
-                                    q for q in target_lesson.questions 
-                                    if isinstance(q, dict) and q.get('enabled', True)
-                                ]
+                        if target_lesson:
+                            # Získej nebo vytvoř test session
+                            test_session = get_or_create_test_session(
+                                user_id=current_user.id,
+                                lesson_id=target_lesson.id,
+                                attempt_id=int(attempt_id) if attempt_id else None
+                            )
                             
-                            if enabled_questions:
-                                # Vyber náhodnou otázku pro testování
-                                import random
-                                test_question = random.choice(enabled_questions)
-                                
-                                system_prompt = f"""Jsi AI examinátor pro vstupní test z obráběcích kapalin a servisu.
+                            # Zkontroluj, jestli je to první otázka (uvítání)
+                            if test_session.current_question_index == 0 and not test_session.answers:
+                                # PRVNÍ OTÁZKA - Položi ji
+                                current_question = get_current_question(test_session)
+                                if current_question:
+                                    question_text = current_question.get('question', '')
+                                    welcome_text = f"Vítejte u vstupního testu z obráběcích kapalin! Budeme procházet {test_session.total_questions} otázek. První otázka: {question_text}"
+                                    response.say(welcome_text, language="cs-CZ", rate="0.9")
+                                    logger.info(f"🎯 Položena první otázka: {question_text}")
+                                else:
+                                    response.say("Chyba při načítání otázky.", language="cs-CZ")
+                            else:
+                                # VYHODNOCENÍ ODPOVĚDI A DALŠÍ OTÁZKA
+                                current_question = get_current_question(test_session)
+                                if current_question and speech_result.strip():
+                                    # Vyhodnoť odpověď pomocí AI
+                                    system_prompt = f"""Jsi AI examinátor pro vstupní test z obráběcích kapalin a servisu.
 
 TESTOVACÍ OTÁZKA:
-{test_question.get('question', '')}
+{current_question.get('question', '')}
 
 SPRÁVNÁ ODPOVĚĎ:
-{test_question.get('correct_answer', '')}
+{current_question.get('correct_answer', '')}
 
 KLÍČOVÁ SLOVA:
-{', '.join(test_question.get('keywords', []))}
+{', '.join(current_question.get('keywords', []))}
 
 INSTRUKCE:
-1. Porovnej odpověď studenta se správnou odpovědí
-2. Vyhodnoť na škále 0-100%
-3. Poskytni krátkou zpětnou vazbu
+1. Porovnej odpověď studenta se správnou odpovědí s tolerancí pro podobná slova
+2. Vyhodnoť na škále 0-100% (buď tolerantní k synonymům)
+3. Poskytni krátkou zpětnou vazbu (max 2 věty)
 4. POVINNĚ přidej na konec: [SKÓRE: XX%]
 
 PŘÍKLAD: "Správně! Obráběcí kapaliny skutečně slouží k chlazení a mazání. [SKÓRE: 90%]"
@@ -1535,37 +1573,62 @@ PŘÍKLAD: "Správně! Obráběcí kapaliny skutečně slouží k chlazení a ma
 Student odpověděl: "{speech_result}"
 Vyhodnoť jeho odpověď."""
 
-                                gpt_response = client.chat.completions.create(
-                                    model="gpt-4o-mini",
-                                    messages=[
-                                        {"role": "system", "content": system_prompt}
-                                    ],
-                                    max_tokens=150,
-                                    temperature=0.3
-                                )
-                                
-                                ai_answer = gpt_response.choices[0].message.content
-                                
-                                # Extrakce skóre
-                                import re
-                                score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
-                                current_score = int(score_match.group(1)) if score_match else 0
-                                clean_answer = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
-                                
-                                logger.info(f"📊 Vstupní test skóre: {current_score}%")
-                                
-                                # Kontrola postupu do Lekce 1
-                                if current_score >= 90:
-                                    current_user.current_lesson_level = 1
-                                    session.commit()
-                                    clean_answer += f" Gratulujeme! Dosáhli jste {current_score}% a postoupili do Lekce 1!"
-                                    logger.info(f"🎉 Uživatel postoupil do Lekce 1")
+                                    gpt_response = client.chat.completions.create(
+                                        model="gpt-4o-mini",
+                                        messages=[
+                                            {"role": "system", "content": system_prompt}
+                                        ],
+                                        max_tokens=150,
+                                        temperature=0.3
+                                    )
+                                    
+                                    ai_answer = gpt_response.choices[0].message.content
+                                    
+                                    # Extrakce skóre
+                                    import re
+                                    score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
+                                    current_score = int(score_match.group(1)) if score_match else 0
+                                    clean_feedback = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
+                                    
+                                    # Uložení odpovědi a posun na další otázku
+                                    updated_session = save_answer_and_advance(
+                                        test_session.id, 
+                                        speech_result, 
+                                        float(current_score), 
+                                        clean_feedback
+                                    )
+                                    
+                                    if updated_session:
+                                        if updated_session.is_completed:
+                                            # TEST DOKONČEN
+                                            final_score = updated_session.current_score
+                                            total_questions = len(updated_session.answers)
+                                            
+                                            if final_score >= 90:
+                                                # ÚSPĚŠNÝ POSTUP
+                                                current_user.current_lesson_level = 1
+                                                session.commit()
+                                                final_message = f"{clean_feedback} Test dokončen! Celkové skóre: {final_score:.1f}% z {total_questions} otázek. Gratulujeme, postoupili jste do Lekce 1!"
+                                            else:
+                                                # NEÚSPĚŠNÝ POKUS
+                                                final_message = f"{clean_feedback} Test dokončen. Celkové skóre: {final_score:.1f}% z {total_questions} otázek. Pro postup potřebujete alespoň 90%. Můžete zkusit znovu!"
+                                            
+                                            response.say(final_message, language="cs-CZ", rate="0.9")
+                                            logger.info(f"🏁 Test dokončen: {final_score:.1f}% z {total_questions} otázek")
+                                        else:
+                                            # DALŠÍ OTÁZKA
+                                            next_question = get_current_question(updated_session)
+                                            if next_question:
+                                                progress = f"({updated_session.current_question_index}/{updated_session.total_questions})"
+                                                next_text = f"{clean_feedback} Další otázka {progress}: {next_question.get('question', '')}"
+                                                response.say(next_text, language="cs-CZ", rate="0.9")
+                                                logger.info(f"🎯 Další otázka {progress}: {next_question.get('question', '')}")
+                                            else:
+                                                response.say("Chyba při načítání další otázky.", language="cs-CZ")
+                                    else:
+                                        response.say("Chyba při ukládání odpovědi.", language="cs-CZ")
                                 else:
-                                    clean_answer += f" Dosáhli jste {current_score}%. Pro postup potřebujete alespoň 90%. Zkuste to znovu!"
-                                
-                                response.say(clean_answer, language="cs-CZ", rate="0.9")
-                            else:
-                                response.say("Vstupní test není připraven. Kontaktujte administrátora.", language="cs-CZ")
+                                    response.say("Nerozuměl jsem vaší odpovědi. Zkuste to prosím znovu.", language="cs-CZ")
                         else:
                             response.say("Vstupní test nebyl nalezen. Kontaktujte administrátora.", language="cs-CZ")
                     
@@ -2682,3 +2745,146 @@ def admin_user_progress(request: Request):
             "back_url": "/admin/users",
             "back_text": "Zpět na uživatele"
         })
+
+class TestSession(Base):
+    """Model pro sledování průběhu testování"""
+    __tablename__ = "test_sessions" 
+    
+    id = mapped_column(Integer, primary_key=True)
+    user_id = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    lesson_id = mapped_column(Integer, ForeignKey("lessons.id"), nullable=False)
+    attempt_id = mapped_column(Integer, ForeignKey("attempts.id"), nullable=True)
+    
+    # Stav testování
+    current_question_index = mapped_column(Integer, nullable=False, default=0)
+    total_questions = mapped_column(Integer, nullable=False, default=0)
+    questions_data = mapped_column(JSON, nullable=False)  # Seznam otázek pro tento test
+    
+    # Výsledky
+    answers = mapped_column(JSON, nullable=False, default=list)  # Seznam odpovědí
+    scores = mapped_column(JSON, nullable=False, default=list)   # Seznam skóre
+    current_score = mapped_column(Float, nullable=False, default=0.0)
+    
+    # Metadata
+    started_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = mapped_column(DateTime, nullable=True)
+    is_completed = mapped_column(Boolean, nullable=False, default=False)
+    
+    # Relationships
+    user = relationship("User")
+    lesson = relationship("Lesson")
+    attempt = relationship("Attempt")
+
+# Funkce pro správu test sessions
+def get_or_create_test_session(user_id: int, lesson_id: int, attempt_id: int = None) -> TestSession:
+    """Získá existující nebo vytvoří novou test session"""
+    session = SessionLocal()
+    try:
+        # Najdi existující aktivní session
+        existing_session = session.query(TestSession).filter(
+            TestSession.user_id == user_id,
+            TestSession.lesson_id == lesson_id,
+            TestSession.is_completed == False
+        ).first()
+        
+        if existing_session:
+            logger.info(f"📋 Nalezena existující test session: {existing_session.id}")
+            return existing_session
+        
+        # Vytvoř novou session
+        lesson = session.query(Lesson).get(lesson_id)
+        if not lesson:
+            raise ValueError(f"Lekce {lesson_id} neexistuje")
+        
+        # Získej aktivní otázky z lekce
+        enabled_questions = []
+        if isinstance(lesson.questions, list):
+            enabled_questions = [
+                q for q in lesson.questions 
+                if isinstance(q, dict) and q.get('enabled', True)
+            ]
+        
+        if not enabled_questions:
+            raise ValueError("Žádné aktivní otázky v lekci")
+        
+        # Vytvoř novou test session
+        test_session = TestSession(
+            user_id=user_id,
+            lesson_id=lesson_id,
+            attempt_id=attempt_id,
+            current_question_index=0,
+            total_questions=len(enabled_questions),
+            questions_data=enabled_questions,
+            answers=[],
+            scores=[]
+        )
+        
+        session.add(test_session)
+        session.commit()
+        
+        logger.info(f"🆕 Vytvořena nová test session: {test_session.id} s {len(enabled_questions)} otázkami")
+        return test_session
+        
+    finally:
+        session.close()
+
+def get_current_question(test_session: TestSession) -> dict:
+    """Získá aktuální otázku pro test session"""
+    if test_session.current_question_index >= len(test_session.questions_data):
+        return None
+    
+    return test_session.questions_data[test_session.current_question_index]
+
+def save_answer_and_advance(test_session_id: int, user_answer: str, score: float, feedback: str):
+    """Uloží odpověď a posune na další otázku"""
+    session = SessionLocal()
+    try:
+        test_session = session.query(TestSession).get(test_session_id)
+        if not test_session:
+            return None
+        
+        # Uložení odpovědi
+        current_question = get_current_question(test_session)
+        if current_question:
+            answer_data = {
+                "question": current_question.get("question", ""),
+                "correct_answer": current_question.get("correct_answer", ""),
+                "user_answer": user_answer,
+                "score": score,
+                "feedback": feedback,
+                "question_index": test_session.current_question_index
+            }
+            
+            # Přidej odpověď do seznamu
+            if not test_session.answers:
+                test_session.answers = []
+            if not test_session.scores:
+                test_session.scores = []
+                
+            test_session.answers.append(answer_data)
+            test_session.scores.append(score)
+            
+            # Aktualizuj průměrné skóre
+            test_session.current_score = sum(test_session.scores) / len(test_session.scores)
+            
+            # Posuň na další otázku
+            test_session.current_question_index += 1
+            
+            # Zkontroluj, jestli je test dokončen
+            if test_session.current_question_index >= test_session.total_questions:
+                test_session.is_completed = True
+                test_session.completed_at = datetime.utcnow()
+                logger.info(f"✅ Test session {test_session_id} dokončena s průměrným skóre {test_session.current_score:.1f}%")
+            
+            # Oznám SQLAlchemy o změnách v JSON sloupcích
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(test_session, 'answers')
+            flag_modified(test_session, 'scores')
+            
+            session.commit()
+            return test_session
+            
+    finally:
+        session.close()
+    
+    return None
