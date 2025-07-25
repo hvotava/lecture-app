@@ -70,6 +70,15 @@
                             </button>
                         </form>
                         
+                        <!-- Tlačítko pro reset testu -->
+                        <form action="{{ request.url_for('admin_reset_test', user_id=user.id) }}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-warning" 
+                                    onclick="return confirm('Resetovat test pro uživatele?')" 
+                                    title="Resetuje aktivní test sessions">
+                                🔄 Reset Test
+                            </button>
+                        </form>
+                        
                         <!-- Tlačítko pro postup do další lekce (pouze pro adminy) -->
                         {% if user.current_lesson_level < 10 %}
                         <form action="{{ request.url_for('admin_advance_user', user_id=user.id) }}" method="post" class="d-inline">

@@ -409,6 +409,27 @@ def admin_advance_user(user_id: int = Path(...)):
     
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
+@admin_router.post("/users/{user_id}/reset-test", name="admin_reset_test")
+def admin_reset_test(user_id: int = Path(...)):
+    """Resetuje test session pro uživatele"""
+    session = SessionLocal()
+    try:
+        # Označ všechny aktivní test sessions jako dokončené
+        active_sessions = session.query(TestSession).filter(
+            TestSession.user_id == user_id,
+            TestSession.is_completed == False
+        ).all()
+        
+        for test_session in active_sessions:
+            test_session.is_completed = True
+            test_session.completed_at = datetime.utcnow()
+        
+        session.commit()
+        logger.info(f"🔄 Admin resetoval test sessions pro uživatele {user_id}")
+        return RedirectResponse(url="/admin/users", status_code=302)
+    finally:
+        session.close()
+
 @admin_router.get("/create-lesson-0", name="admin_create_lesson_0")
 def admin_create_lesson_0(request: Request):
     """Endpoint pro vytvoření Lekce 0 s 30 základními otázkami"""
@@ -1540,24 +1561,14 @@ async def process_speech(request: Request):
                                 attempt_id=int(attempt_id) if attempt_id else None
                             )
                             
-                            # ROZHODNUTÍ: První otázka nebo vyhodnocení odpovědi?
-                            # Pokud uživatel říká smysluplnou odpověď (>2 slov), určitě odpovídá na otázku
+                            # NOVÁ LOGIKA: Test session je vždy nová, takže VŽDY začni úvodem
                             speech_words = speech_result.strip().split() if speech_result.strip() else []
-                            is_answering_question = len(speech_words) >= 3  # 3+ slova = odpověď na otázku
-                            
-                            # SPECIÁLNÍ PŘÍPAD: Pokud je speech_result prázdný nebo velmi krátký, je to první volání
-                            is_very_short_input = len(speech_words) <= 2 and len(test_session.answers) == 0
-                            
-                            # První otázka pouze pokud je test na začátku A uživatel neodpovídá
-                            is_first_question = (test_session.current_question_index == 0 and 
-                                               len(test_session.answers) == 0 and 
-                                               (not is_answering_question or is_very_short_input))
                             
                             logger.info(f"🔍 Analýza vstupu: '{speech_result}' ({len(speech_words)} slov)")
                             logger.info(f"🔍 Test session stav: index={test_session.current_question_index}, answers={len(test_session.answers)}, total={test_session.total_questions}")
-                            logger.info(f"🔍 is_answering_question: {is_answering_question}, is_first_question: {is_first_question}")
                             
-                            if is_first_question:
+                            # KONTROLA: Je to první otázka v nové session?
+                            if test_session.current_question_index == 0 and len(test_session.answers) == 0:
                                 # PRVNÍ OTÁZKA - Položi ji
                                 current_question = get_current_question(test_session)
                                 if current_question:
@@ -2843,20 +2854,23 @@ class TestSession(Base):
 
 # Funkce pro správu test sessions
 def get_or_create_test_session(user_id: int, lesson_id: int, attempt_id: int = None) -> TestSession:
-    """Získá existující nebo vytvoří novou test session"""
+    """Vytvoří NOVOU test session pro každý pokus (žádné pokračování)"""
     session = SessionLocal()
     try:
-        # Najdi existující aktivní session
-        existing_session = session.query(TestSession).filter(
+        # VŽDY VYTVOŘ NOVOU SESSION - žádné pokračování v nedokončených testech
+        # Nejdříve označ všechny existující session jako dokončené
+        existing_sessions = session.query(TestSession).filter(
             TestSession.user_id == user_id,
             TestSession.lesson_id == lesson_id,
             TestSession.is_completed == False
-        ).first()
+        ).all()
         
-        if existing_session:
-            logger.info(f"📋 Nalezena existující test session: {existing_session.id}")
-            logger.info(f"🔍 Existující session: index={existing_session.current_question_index}, total={existing_session.total_questions}, completed={existing_session.is_completed}")
-            return existing_session
+        for old_session in existing_sessions:
+            old_session.is_completed = True
+            old_session.completed_at = datetime.utcnow()
+            logger.info(f"🔄 Označena stará session {old_session.id} jako dokončená")
+        
+        session.commit()
         
         # Vytvoř novou session
         lesson = session.query(Lesson).get(lesson_id)
