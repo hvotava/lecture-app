@@ -1493,13 +1493,15 @@ async def voice_handler(request: Request):
 @app.post("/voice/process")
 async def process_speech(request: Request):
     """Zpracuje hlasový vstup od uživatele s inteligentním systémem lekcí"""
-    logger.info("Přijat hlasový vstup od uživatele")
+    logger.info("🎙️ === PROCESS_SPEECH ZAČÁTEK ===")
     
     form = await request.form()
     speech_result = form.get('SpeechResult', '')
     confidence = form.get('Confidence', '0')
+    attempt_id = request.query_params.get('attempt_id')
     
-    logger.info(f"Rozpoznaná řeč: '{speech_result}' (confidence: {confidence})")
+    logger.info(f"📝 Rozpoznaná řeč: '{speech_result}' (confidence: {confidence})")
+    logger.info(f"🔗 attempt_id: {attempt_id}")
     
     response = VoiceResponse()
     
@@ -1508,8 +1510,10 @@ async def process_speech(request: Request):
     should_continue_test = False
     
     if speech_result:
+        logger.info(f"✅ Speech result není prázdný, pokračuji ve zpracování...")
         try:
             openai_api_key = os.getenv('OPENAI_API_KEY')
+            logger.info(f"🔑 OpenAI API key: {'✅ Nastaven' if openai_api_key else '❌ Chybí'}")
             if openai_api_key:
                 import openai
                 client = openai.OpenAI(api_key=openai_api_key)
@@ -1548,10 +1552,16 @@ async def process_speech(request: Request):
                     
                     # Najdi správnou lekci podle úrovně uživatele
                     if user_level == 0:
+                        logger.info("🎯 Uživatel je na úrovni 0 - hledám Lekci 0...")
                         # VSTUPNÍ TEST - STRUKTUROVANÉ OTÁZKY
                         target_lesson = session.query(Lesson).filter(
                             Lesson.title.contains("Lekce 0")
                         ).first()
+                        
+                        if target_lesson:
+                            logger.info(f"✅ Nalezena Lekce 0: {target_lesson.title}")
+                        else:
+                            logger.error("❌ Lekce 0 nebyla nalezena v databázi!")
                         
                         if target_lesson:
                             # Získej nebo vytvoř test session
@@ -1841,6 +1851,7 @@ Odpověz mu jasně a srozumitelně v češtině."""
                 rate="0.9"
             )
     else:
+        logger.warning(f"❌ Speech result je prázdný: '{speech_result}'")
         response.say(
             "Nerozuměl jsem vám. Hovor ukončuji.",
             language="cs-CZ",
