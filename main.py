@@ -1541,16 +1541,20 @@ async def process_speech(request: Request):
                             )
                             
                             # ROZHODNUTÍ: První otázka nebo vyhodnocení odpovědi?
-                            # Pokud uživatel říká smysluplnou odpověď (>5 slov), určitě odpovídá na otázku
-                            speech_words = speech_result.strip().split()
+                            # Pokud uživatel říká smysluplnou odpověď (>2 slov), určitě odpovídá na otázku
+                            speech_words = speech_result.strip().split() if speech_result.strip() else []
                             is_answering_question = len(speech_words) >= 3  # 3+ slova = odpověď na otázku
+                            
+                            # SPECIÁLNÍ PŘÍPAD: Pokud je speech_result prázdný nebo velmi krátký, je to první volání
+                            is_very_short_input = len(speech_words) <= 2 and len(test_session.answers) == 0
                             
                             # První otázka pouze pokud je test na začátku A uživatel neodpovídá
                             is_first_question = (test_session.current_question_index == 0 and 
                                                len(test_session.answers) == 0 and 
-                                               not is_answering_question)
+                                               (not is_answering_question or is_very_short_input))
                             
                             logger.info(f"🔍 Analýza vstupu: '{speech_result}' ({len(speech_words)} slov)")
+                            logger.info(f"🔍 Test session stav: index={test_session.current_question_index}, answers={len(test_session.answers)}, total={test_session.total_questions}")
                             logger.info(f"🔍 is_answering_question: {is_answering_question}, is_first_question: {is_first_question}")
                             
                             if is_first_question:
@@ -2851,6 +2855,7 @@ def get_or_create_test_session(user_id: int, lesson_id: int, attempt_id: int = N
         
         if existing_session:
             logger.info(f"📋 Nalezena existující test session: {existing_session.id}")
+            logger.info(f"🔍 Existující session: index={existing_session.current_question_index}, total={existing_session.total_questions}, completed={existing_session.is_completed}")
             return existing_session
         
         # Vytvoř novou session
@@ -2885,6 +2890,7 @@ def get_or_create_test_session(user_id: int, lesson_id: int, attempt_id: int = N
         session.commit()
         
         logger.info(f"🆕 Vytvořena nová test session: {test_session.id} s {len(enabled_questions)} otázkami")
+        logger.info(f"🔍 První 3 otázky: {[q.get('question', 'N/A')[:50] for q in enabled_questions[:3]]}")
         return test_session
         
     finally:
