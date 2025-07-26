@@ -730,9 +730,53 @@ def admin_list_lessons(request: Request):
                 logger.warning(f"Chyba při přidávání dalších sloupců: {e}")
             session.rollback()
         
-        # 3. Nyní teprve načti data
-        lessons = session.query(Lesson).order_by(Lesson.id.desc()).all()
-        logger.info(f"✅ Načteno {len(lessons)} lekcí")
+        # 3. Bezpečné načtení dat s fallback pro chybějící sloupce
+        try:
+            lessons = session.query(Lesson).order_by(Lesson.id.desc()).all()
+            
+            # Ošetření chybějících sloupců pro každou lekci
+            for lesson in lessons:
+                if not hasattr(lesson, 'lesson_number') or lesson.lesson_number is None:
+                    lesson.lesson_number = 0
+                if not hasattr(lesson, 'lesson_type') or lesson.lesson_type is None:
+                    lesson.lesson_type = 'standard'
+                if not hasattr(lesson, 'required_score') or lesson.required_score is None:
+                    lesson.required_score = 90.0
+                if not hasattr(lesson, 'description') or lesson.description is None:
+                    lesson.description = ''
+                    
+            logger.info(f"✅ Načteno {len(lessons)} lekcí s ošetřenými sloupci")
+            
+        except Exception as query_error:
+            logger.error(f"❌ Chyba při načítání lekcí: {query_error}")
+            # Fallback - použij raw SQL
+            lessons_raw = session.execute(text("""
+                SELECT id, title, language, script, questions, level, created_at,
+                       COALESCE(lesson_number, 0) as lesson_number,
+                       COALESCE(lesson_type, 'standard') as lesson_type,
+                       COALESCE(required_score, 90.0) as required_score,
+                       COALESCE(description, '') as description
+                FROM lessons ORDER BY id DESC
+            """)).fetchall()
+            
+            lessons = []
+            for row in lessons_raw:
+                lesson = type('Lesson', (), {
+                    'id': row[0],
+                    'title': row[1],
+                    'language': row[2],
+                    'script': row[3],
+                    'questions': row[4],
+                    'level': row[5],
+                    'created_at': row[6],
+                    'lesson_number': row[7],
+                    'lesson_type': row[8],
+                    'required_score': row[9],
+                    'description': row[10]
+                })()
+                lessons.append(lesson)
+            
+            logger.info(f"✅ Načteno {len(lessons)} lekcí pomocí fallback SQL")
         
         session.close()
         return templates.TemplateResponse("lessons/list.html", {"request": request, "lessons": lessons})

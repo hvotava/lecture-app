@@ -34,7 +34,7 @@
             {% for lesson in lessons %}
             <tr>
                 <td>
-                    {% if hasattr(lesson, 'lesson_number') and lesson.lesson_number is not none %}
+                    {% if lesson.lesson_number is defined and lesson.lesson_number is not none %}
                         {% if lesson.lesson_number == 0 %}
                             <span class="badge bg-warning text-dark">{{ lesson.lesson_number }}</span>
                         {% else %}
