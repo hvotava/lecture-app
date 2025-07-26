@@ -1903,6 +1903,15 @@ async def handle_entry_test(session, current_user, speech_result, response, clie
         response.say("Vstupní test nebyl nalezen. Kontaktujte administrátora.", language="cs-CZ")
         return False
     
+    # Zkontroluj, jestli už existuje aktivní session PŘED jejím získáním
+    session_db = SessionLocal()
+    existing_active_session = session_db.query(TestSession).filter(
+        TestSession.user_id == current_user.id,
+        TestSession.lesson_id == target_lesson.id,
+        TestSession.is_completed == False
+    ).first()
+    session_db.close()
+    
     # Získej nebo vytvoř test session
     test_session = get_or_create_test_session(
         user_id=current_user.id,
@@ -1910,8 +1919,9 @@ async def handle_entry_test(session, current_user, speech_result, response, clie
         attempt_id=int(attempt_id) if attempt_id else None
     )
     
-    # První spuštění - položit první otázku
-    if test_session.current_question_index == 0 and len(test_session.answers) == 0:
+    # Rozlišení: NOVÁ session (první otázka) vs EXISTUJÍCÍ session (odpověď)
+    if not existing_active_session:
+        # NOVÁ SESSION - položit první otázku
         current_question = get_current_question(test_session)
         if current_question:
             question_text = current_question.get('question', '')
@@ -1922,15 +1932,17 @@ async def handle_entry_test(session, current_user, speech_result, response, clie
         else:
             response.say("Chyba při načítání otázky.", language="cs-CZ")
             return False
-    
-    # Vyhodnocení odpovědi a další otázka
-    current_question = get_current_question(test_session)
-    if not current_question or not speech_result:
-        response.say("Nerozuměl jsem vaší odpovědi. Zkuste to prosím znovu.", language="cs-CZ")
-        return True
-    
-    # AI vyhodnocení
-    system_prompt = f"""Jsi AI examinátor pro vstupní test z obráběcích kapalin.
+    else:
+        # EXISTUJÍCÍ SESSION - vyhodnotit odpověď
+        logger.info(f"💬 Vyhodnocuji odpověď: '{speech_result}'")
+        
+        current_question = get_current_question(test_session)
+        if not current_question or not speech_result:
+            response.say("Nerozuměl jsem vaší odpovědi. Zkuste to prosím znovu.", language="cs-CZ")
+            return True
+        
+        # AI vyhodnocení
+        system_prompt = f"""Jsi AI examinátor pro vstupní test z obráběcích kapalin.
 
 OTÁZKA: {current_question.get('question', '')}
 SPRÁVNÁ ODPOVĚĎ: {current_question.get('correct_answer', '')}
@@ -1941,61 +1953,61 @@ Poskytni krátkou zpětnou vazbu a na konec přidej: [SKÓRE: XX%]
 
 Student odpověděl: "{speech_result}"
 """
-    
-    try:
-        gpt_response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "system", "content": system_prompt}],
-            max_tokens=150,
-            temperature=0.3
-        )
         
-        ai_answer = gpt_response.choices[0].message.content
-        
-        # Extrakce skóre
-        import re
-        score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
-        current_score = int(score_match.group(1)) if score_match else 0
-        clean_feedback = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
-        
-        # Uložení odpovědi a posun
-        updated_session = save_answer_and_advance(
-            test_session.id, 
-            speech_result, 
-            float(current_score), 
-            clean_feedback
-        )
-        
-        if updated_session and updated_session.get('is_completed'):
-            # Test dokončen
-            final_score = updated_session.get('current_score', 0)
-            total_questions = len(updated_session.get('answers', []))
+        try:
+            gpt_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": system_prompt}],
+                max_tokens=150,
+                temperature=0.3
+            )
             
-            if final_score >= 90:
-                current_user.current_lesson_level = 1
-                session.commit()
-                final_message = f"{clean_feedback} Test dokončen! Skóre: {final_score:.1f}% z {total_questions} otázek. Gratulujeme, postoupili jste do Lekce 1!"
-            else:
-                final_message = f"{clean_feedback} Test dokončen. Skóre: {final_score:.1f}% z {total_questions} otázek. Pro postup potřebujete 90%. Můžete zkusit znovu!"
+            ai_answer = gpt_response.choices[0].message.content
             
-            response.say(final_message, language="cs-CZ", rate="0.9")
-            return False  # Ukončit konverzaci
-        else:
-            # Další otázka
-            next_question = get_current_question(updated_session)
-            if next_question:
-                progress = f"({updated_session.get('current_question_index', 0)}/{updated_session.get('total_questions', 0)})"
-                next_text = f"{clean_feedback} Další otázka {progress}: {next_question.get('question', '')}"
-                response.say(next_text, language="cs-CZ", rate="0.9")
-                return True  # Pokračovat
-            else:
-                response.say("Chyba při načítání další otázky.", language="cs-CZ")
-                return False
+            # Extrakce skóre
+            import re
+            score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
+            current_score = int(score_match.group(1)) if score_match else 0
+            clean_feedback = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
+            
+            # Uložení odpovědi a posun
+            updated_session = save_answer_and_advance(
+                test_session.id, 
+                speech_result, 
+                float(current_score), 
+                clean_feedback
+            )
+            
+            if updated_session and updated_session.get('is_completed'):
+                # Test dokončen
+                final_score = updated_session.get('current_score', 0)
+                total_questions = len(updated_session.get('answers', []))
                 
-    except Exception as e:
-        logger.error(f"❌ AI chyba: {e}")
-        response.say("Chyba při vyhodnocování odpovědi.", language="cs-CZ")
-        return False
+                if final_score >= 90:
+                    current_user.current_lesson_level = 1
+                    session.commit()
+                    final_message = f"{clean_feedback} Test dokončen! Skóre: {final_score:.1f}% z {total_questions} otázek. Gratulujeme, postoupili jste do Lekce 1!"
+                else:
+                    final_message = f"{clean_feedback} Test dokončen. Skóre: {final_score:.1f}% z {total_questions} otázek. Pro postup potřebujete 90%. Můžete zkusit znovu!"
+                
+                response.say(final_message, language="cs-CZ", rate="0.9")
+                return False  # Ukončit konverzaci
+            else:
+                # Další otázka
+                next_question = get_current_question(updated_session)
+                if next_question:
+                    progress = f"({updated_session.get('current_question_index', 0)}/{updated_session.get('total_questions', 0)})"
+                    next_text = f"{clean_feedback} Další otázka {progress}: {next_question.get('question', '')}"
+                    response.say(next_text, language="cs-CZ", rate="0.9")
+                    return True  # Pokračovat
+                else:
+                    response.say("Chyba při načítání další otázky.", language="cs-CZ")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"❌ AI chyba: {e}")
+            response.say("Chyba při vyhodnocování odpovědi.", language="cs-CZ")
+            return False
 
 
 async def handle_regular_lesson(session, current_user, user_level, speech_result, response, client):
@@ -3058,23 +3070,24 @@ class TestSession(Base):
 
 # Funkce pro správu test sessions
 def get_or_create_test_session(user_id: int, lesson_id: int, attempt_id: int = None) -> TestSession:
-    """Vytvoří NOVOU test session pro každý pokus (žádné pokračování)"""
+    """Najde existující aktivní test session nebo vytvoří novou"""
     session = SessionLocal()
     try:
-        # VŽDY VYTVOŘ NOVOU SESSION - žádné pokračování v nedokončených testech
-        # Nejdříve označ všechny existující session jako dokončené
-        existing_sessions = session.query(TestSession).filter(
+        # NEJDŘÍV zkus najít existující aktivní session
+        existing_session = session.query(TestSession).filter(
             TestSession.user_id == user_id,
             TestSession.lesson_id == lesson_id,
             TestSession.is_completed == False
-        ).all()
+        ).first()
         
-        for old_session in existing_sessions:
-            old_session.is_completed = True
-            old_session.completed_at = datetime.utcnow()
-            logger.info(f"🔄 Označena stará session {old_session.id} jako dokončená")
+        # Pokud existuje aktivní session, vrať ji
+        if existing_session:
+            logger.info(f"📋 Pokračuji v existující test session {existing_session.id} (otázka {existing_session.current_question_index + 1}/{existing_session.total_questions})")
+            session.close()
+            return existing_session
         
-        session.commit()
+        # Pokud neexistuje aktivní session, vytvoř novou
+        logger.info(f"🆕 Vytvářím novou test session pro uživatele {user_id}")
         
         # Vytvoř novou session
         lesson = session.query(Lesson).get(lesson_id)
