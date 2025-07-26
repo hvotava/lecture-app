@@ -2028,18 +2028,23 @@ async def handle_entry_test(session, current_user, speech_result, response, clie
             response.say("Nerozuměl jsem vaší odpovědi. Zkuste to prosím znovu.", language="cs-CZ")
             return True
         
-        # AI vyhodnocení
-        system_prompt = f"""Jsi AI examinátor pro vstupní test z obráběcích kapalin.
+        # AI vyhodnocení podle nových instrukcí
+        keywords = current_question.get('keywords', [])
+        system_prompt = f"""ÚKOL:
+Vyhodnoť studentskou odpověď na zadanou otázku a porovnej ji s ideální správnou odpovědí a se seznamem klíčových slov.
 
 OTÁZKA: {current_question.get('question', '')}
 SPRÁVNÁ ODPOVĚĎ: {current_question.get('correct_answer', '')}
-KLÍČOVÁ SLOVA: {', '.join(current_question.get('keywords', []))}
+KLÍČOVÁ SLOVA: {', '.join(keywords)}
+STUDENTSKÁ ODPOVĚĎ: "{speech_result}"
 
-Vyhodnoť odpověď studenta (0-100%). Buď tolerantní k synonymům.
-Poskytni krátkou zpětnou vazbu a na konec přidej: [SKÓRE: XX%]
+VÝSTUP:
+1. Procentuální skóre: Vypočítej, kolik procent z klíčových slov student ve své odpovědi správně použil (každé klíčové slovo má stejnou váhu).
+2. Ultra krátká zpětná vazba (max. 1–2 věty):  
+   - Pokud chybí klíčová slova, vyjmenuj je stručně: „Chybí: …"  
+   - Pokud odpověď obsahuje všechna klíčová slova: „Výborně, úplná odpověď!"
 
-Student odpověděl: "{speech_result}"
-"""
+Formát odpovědi: [FEEDBACK] [SKÓRE: XX%]"""
         
         try:
             gpt_response = client.chat.completions.create(
@@ -2051,11 +2056,18 @@ Student odpověděl: "{speech_result}"
             
             ai_answer = gpt_response.choices[0].message.content
             
-            # Extrakce skóre
+            # Extrakce skóre - robustní regex pro různé formáty
             import re
-            score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
+            score_match = re.search(r'\[SKÓRE:\s*(\d+)%?\]', ai_answer, re.IGNORECASE)
             current_score = int(score_match.group(1)) if score_match else 0
-            clean_feedback = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
+            
+            # Vyčistění feedback od skóre tagu
+            clean_feedback = re.sub(r'\[SKÓRE:\s*\d+%?\]', '', ai_answer, flags=re.IGNORECASE).strip()
+            
+            # Log pro debug AI odpovědi
+            logger.info(f"🤖 AI raw odpověď: '{ai_answer}'")
+            logger.info(f"🎯 Extrahované skóre: {current_score}%")
+            logger.info(f"💬 Čistý feedback: '{clean_feedback}'")
             
             # Vylepšené logování před uložením odpovědi
             log_answer_analysis(
@@ -2146,18 +2158,45 @@ def log_answer_analysis(user_id: int, question: dict, user_answer: str, ai_score
         elif ai_score < 60:
             issues.append("NÍZKÉ_SKÓRE")
         
-        # Chybějící klíčová slova
+        # Detailní analýza klíčových slov
         if keywords:
-            found_keywords = [kw for kw in keywords if kw.lower() in user_answer.lower()]
-            missing_keywords = [kw for kw in keywords if kw.lower() not in user_answer.lower()]
+            found_keywords = []
+            missing_keywords = []
+            
+            for kw in keywords:
+                # Tolerantní hledání - i částečné shody
+                if kw.lower() in user_answer.lower():
+                    found_keywords.append(kw)
+                else:
+                    # Hledej synonyma nebo podobná slova
+                    synonyms = {
+                        'chlazení': ['hlazení', 'chladění', 'ochlazování'],
+                        'mazání': ['mazaní', 'lubrication'],
+                        'odvod': ['odvedení', 'odvádění']
+                    }
+                    
+                    found_synonym = False
+                    if kw.lower() in synonyms:
+                        for syn in synonyms[kw.lower()]:
+                            if syn in user_answer.lower():
+                                found_keywords.append(f"{kw}({syn})")
+                                found_synonym = True
+                                break
+                    
+                    if not found_synonym:
+                        missing_keywords.append(kw)
+            
+            # Výpočet pokrytí klíčových slov
+            keyword_coverage = len(found_keywords) / len(keywords) * 100 if keywords else 0
             
             if not found_keywords:
                 issues.append("ŽÁDNÁ_KLÍČOVÁ_SLOVA")
-            elif len(found_keywords) < len(keywords) / 2:
+            elif keyword_coverage < 50:
                 issues.append("MÁLO_KLÍČOVÝCH_SLOV")
                 
-            logger.info(f"🔍 Nalezená klíčová slova: {found_keywords}")
+            logger.info(f"🔍 Nalezená klíčová slova ({len(found_keywords)}/{len(keywords)}): {found_keywords}")
             logger.info(f"❌ Chybějící klíčová slova: {missing_keywords}")
+            logger.info(f"📊 Pokrytí klíčových slov: {keyword_coverage:.1f}%")
         
         if issues:
             logger.warning(f"⚠️ Identifikované problémy: {', '.join(issues)}")
