@@ -98,26 +98,50 @@
 </div>
 
 <div class="mt-4">
-    <div class="card">
-        <div class="card-header">
-            <h5>📊 Legenda systému lekcí</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <h6>Struktura lekcí:</h6>
-                    <ul class="list-unstyled">
-                        <li><span class="badge bg-warning">Lekce 0</span> - Vstupní test (30 otázek, 90% pro postup)</li>
-                        <li><span class="badge bg-primary">Lekce 1-10</span> - Pokročilé lekce obráběcích kapalin</li>
-                    </ul>
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5>📊 Legenda systému lekcí</h5>
                 </div>
-                <div class="col-md-6">
-                    <h6>Postup:</h6>
-                    <ul class="list-unstyled">
-                        <li>✅ <strong>Automatický:</strong> AI asistent vyhodnocuje odpovědi</li>
-                        <li>⬆️ <strong>Manuální:</strong> Admin může posunout uživatele</li>
-                        <li>📞 <strong>Volání:</strong> Spustí aktuální lekci uživatele</li>
-                    </ul>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Struktura lekcí:</h6>
+                            <ul class="list-unstyled">
+                                <li><span class="badge bg-warning">Lekce 0</span> - Vstupní test (30 otázek, 90% pro postup)</li>
+                                <li><span class="badge bg-primary">Lekce 1-10</span> - Pokročilé lekce obráběcích kapalin</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Postup:</h6>
+                            <ul class="list-unstyled">
+                                <li>✅ <strong>Automatický:</strong> AI asistent vyhodnocuje odpovědi</li>
+                                <li>⬆️ <strong>Manuální:</strong> Admin může posunout uživatele</li>
+                                <li>📞 <strong>Volání:</strong> Spustí aktuální lekci uživatele</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>⚙️ Správa systému</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="/admin/lesson-0-questions" class="btn btn-outline-primary">
+                            📝 Editovat otázky vstupního testu
+                        </a>
+                        <a href="/admin/lessons" class="btn btn-outline-secondary">
+                            📚 Správa lekcí
+                        </a>
+                        <a href="/admin/user-progress" class="btn btn-outline-info">
+                            📊 Pokrok uživatelů
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
