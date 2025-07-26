@@ -457,7 +457,7 @@ class TwilioService:
         )
         response.pause(length=1)
         response.say(
-            "Prosím odpovězte.",
+            "Píp.",
             language=language,
             voice="Google.cs-CZ-Standard-A",
             rate="0.9"

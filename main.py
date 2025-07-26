@@ -2240,10 +2240,10 @@ DŮLEŽITÉ PRAVIDLA PRO VYHODNOCENÍ:
 1. POROVNÁVÁNÍ SE SPRÁVNOU ODPOVĚDÍ: Hlavní kritérium je podobnost s ideální správnou odpovědí, ne klíčová slova.
 
 2. ROZPOZNÁVÁNÍ CHYB ASR: Ber v úvahu možné chyby rozpoznávání řeči:
-   - 'operátorem' může být 'separátorem'
-   - 'chlazení' může být 'hlazení'
-   - 'mazání' může být 'mazaní'
-   - 'odvod' může být 'odvod'
+   - 'operátorem' = 'separátorem' (ČASTÁ CHYBA ASR!)
+   - 'chlazení' = 'hlazení'
+   - 'mazání' = 'mazaní'
+   - 'odvod' = 'odvod'
 
 3. SYNONYMA A VARIANTY: Uznávej tyto varianty:
    - 'refraktometr' = 'refraktometrický', 'refraktometrické'
@@ -2252,11 +2252,27 @@ DŮLEŽITÉ PRAVIDLA PRO VYHODNOCENÍ:
    - 'pH' = 'ph', 'PH', 'ph hodnota'
    - 'emulze' = 'emulzní', 'emulzní kapalina'
    - 'chlazení' = 'chlazen', 'ochlazován', 'chlazená'
-   - 'separátor' = 'separátor oleje', 'separátorem', 'operátorem'
-   - 'odstranění' = 'odstranit', 'odstraňuje', 'odstraněno'
-   - 'skimmer' = 'skimmerem', 'skimmeru'
+   - 'separátor' = 'separátor oleje', 'separátorem', 'separátoru', 'operátorem', 'operátor'
+   - 'odstranění' = 'odstranit', 'odstraňuje', 'odstraněno', 'odstraňování'
+   - 'skimmer' = 'skimmerem', 'skimmeru', 'skimmer'
 
-4. VYPOČET SKÓRE: 
+4. KRITICKÉ PRAVIDLO: 
+   - Pokud student řekne 'operátorem' nebo 'operátor', považuj to za 'separátorem'!
+   - Pokud student řekne 'separátor', považuj to za 'separátorem' (stejný význam)!
+   - Různé tvary slov mají stejný význam: 'separátor' = 'separátorem' = 'separátoru'
+
+5. ROZPOZNÁVÁNÍ KOŘENŮ SLOV:
+   - Pokud kořen slova je správný, považuj to za správné
+   - Příklad: 'chlazení' = 'chlazen', 'chlazená', 'chlazený', 'ochlazování'
+   - Příklad: 'mazání' = 'mazan', 'mazaný', 'mazán', 'mazání'
+   - Příklad: 'odstranění' = 'odstranit', 'odstraňuje', 'odstraněno', 'odstraňování'
+   - Příklad: 'separátor' = 'separátorem', 'separátoru', 'separátorový'
+   - Příklad: 'skimmer' = 'skimmerem', 'skimmeru', 'skimmerový'
+   - Příklad: 'refraktometr' = 'refraktometrický', 'refraktometrické', 'refraktometrů'
+   - Příklad: 'koncentrace' = 'koncentrovaný', 'koncentrovaná', 'koncentrovat'
+   - Příklad: 'bakterie' = 'bakteriální', 'bakterií', 'bakteriálního'
+
+6. VYPOČET SKÓRE: 
    - 100%: Odpověď obsahuje všechny klíčové koncepty ze správné odpovědi
    - 80-99%: Odpověď obsahuje většinu klíčových konceptů
    - 60-79%: Odpověď obsahuje některé klíčové koncepty
