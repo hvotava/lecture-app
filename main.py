@@ -463,7 +463,7 @@ def admin_create_lesson_0(request: Request):
                 "number": 4,
                 "question": "Jak se měří koncentrací obráběcí emulze?",
                 "correct_answer": "Refraktometrem nebo titrací",
-                "keywords": ["refraktometr", "titrace", "měření"],
+                "keywords": ["refraktometr", "titrace"],
                 "enabled": True
             },
             {
@@ -1502,7 +1502,200 @@ def admin_user_progress(request: Request):
             "back_text": "Zpět na uživatele"
         })
 
+@admin_router.get("/lesson-0-questions", response_class=HTMLResponse, name="admin_lesson_0_questions")
+def admin_lesson_0_questions(request: Request):
+    """Zobrazení a editace otázek vstupního testu (Lekce 0)"""
+    session = SessionLocal()
+    try:
+        # Najdi Lekci 0
+        lesson_0 = session.query(Lesson).filter(Lesson.lesson_number == 0).first()
+        
+        if not lesson_0:
+            return HTMLResponse(content="""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Správa otázek - Lekce 0</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            </head>
+            <body>
+                <div class="container mt-4">
+                    <h2>❌ Lekce 0 nebyla nalezena</h2>
+                    <p>Nejprve vytvořte Lekci 0 pomocí <a href="/admin/create-lesson-0">tohoto odkazu</a>.</p>
+                    <a href="/admin" class="btn btn-primary">← Zpět na admin</a>
+                </div>
+            </body>
+            </html>
+            """)
+        
+        questions = lesson_0.questions if isinstance(lesson_0.questions, list) else []
+        
+        # Vytvoření HTML tabulky s otázkami
+        questions_html = ""
+        for i, question in enumerate(questions):
+            if isinstance(question, dict):
+                question_text = question.get('question', 'N/A')
+                correct_answer = question.get('correct_answer', 'N/A')
+                keywords = ', '.join(question.get('keywords', []))
+                enabled = question.get('enabled', True)
+                
+                questions_html += f"""
+                <tr>
+                    <td>{i + 1}</td>
+                    <td>
+                        <textarea class="form-control" name="question_{i}" rows="2">{question_text}</textarea>
+                    </td>
+                    <td>
+                        <textarea class="form-control" name="answer_{i}" rows="2">{correct_answer}</textarea>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control" name="keywords_{i}" value="{keywords}" placeholder="klíčová slova oddělená čárkami">
+                    </td>
+                    <td>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="enabled_{i}" {'checked' if enabled else ''}>
+                        </div>
+                    </td>
+                </tr>
+                """
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Správa otázek - Lekce 0</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+        </head>
+        <body>
+            <div class="container mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>📝 Správa otázek - Vstupní test (Lekce 0)</h2>
+                    <a href="/admin" class="btn btn-secondary">← Zpět na admin</a>
+                </div>
+                
+                <div class="alert alert-info">
+                    <strong>💡 Tip:</strong> Můžete upravit otázky, správné odpovědi, klíčová slova a povolit/zakázat otázky.
+                    Klíčová slova oddělujte čárkami (např. "refraktometr, titrace").
+                </div>
+                
+                <form hx-post="/admin/lesson-0-questions" hx-target="#result" class="mb-4">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Otázka</th>
+                                    <th>Správná odpověď</th>
+                                    <th>Klíčová slova</th>
+                                    <th>Povoleno</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {questions_html}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            💾 Uložit změny
+                        </button>
+                        <a href="/admin/create-lesson-0" class="btn btn-warning">
+                            🔄 Obnovit výchozí otázky
+                        </a>
+                    </div>
+                </form>
+                
+                <div id="result"></div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        logger.error(f"Chyba při načítání otázek Lekce 0: {e}")
+        return HTMLResponse(content=f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Chyba</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-4">
+                <div class="alert alert-danger">
+                    <h4>❌ Chyba při načítání otázek</h4>
+                    <p>{str(e)}</p>
+                </div>
+                <a href="/admin" class="btn btn-primary">← Zpět na admin</a>
+            </div>
+        </body>
+        </html>
+        """)
+    finally:
+        session.close()
 
+@admin_router.post("/lesson-0-questions", response_class=HTMLResponse)
+async def admin_lesson_0_questions_post(request: Request):
+    """Uložení změn v otázkách vstupního testu"""
+    session = SessionLocal()
+    try:
+        form = await request.form()
+        
+        # Najdi Lekci 0
+        lesson_0 = session.query(Lesson).filter(Lesson.lesson_number == 0).first()
+        if not lesson_0:
+            return HTMLResponse(content="<div class='alert alert-danger'>❌ Lekce 0 nebyla nalezena</div>")
+        
+        # Získej aktuální otázky
+        current_questions = lesson_0.questions if isinstance(lesson_0.questions, list) else []
+        updated_questions = []
+        
+        # Zpracuj každou otázku
+        for i, question in enumerate(current_questions):
+            if isinstance(question, dict):
+                # Získej hodnoty z formuláře
+                question_text = form.get(f'question_{i}', question.get('question', ''))
+                correct_answer = form.get(f'answer_{i}', question.get('correct_answer', ''))
+                keywords_str = form.get(f'keywords_{i}', '')
+                enabled = form.get(f'enabled_{i}') == 'on'
+                
+                # Zpracuj klíčová slova
+                keywords = [kw.strip() for kw in keywords_str.split(',') if kw.strip()]
+                
+                # Vytvoř aktualizovanou otázku
+                updated_question = {
+                    'number': i + 1,
+                    'question': question_text,
+                    'correct_answer': correct_answer,
+                    'keywords': keywords,
+                    'enabled': enabled
+                }
+                updated_questions.append(updated_question)
+        
+        # Ulož změny
+        lesson_0.questions = updated_questions
+        session.commit()
+        
+        return HTMLResponse(content=f"""
+        <div class="alert alert-success">
+            ✅ Otázky byly úspěšně uloženy! ({len(updated_questions)} otázek)
+        </div>
+        """)
+        
+    except Exception as e:
+        logger.error(f"Chyba při ukládání otázek Lekce 0: {e}")
+        session.rollback()
+        return HTMLResponse(content=f"""
+        <div class="alert alert-danger">
+            ❌ Chyba při ukládání: {str(e)}
+        </div>
+        """)
+    finally:
+        session.close()
 
 # Připojení admin routeru
 app.include_router(admin_router)
@@ -1780,9 +1973,15 @@ async def process_speech(request: Request):
     else:
         # Kontrola confidence threshold pro ASR
         confidence_float = float(confidence) if confidence else 0.0
-    
+
     LOW_CONFIDENCE_THRESHOLD = 0.3  # Práh pro nízkou jistotu
-    
+
+    # Pokud máme speech_result ale confidence je 0, pravděpodobně je to false positive
+    # Twilio někdy neposkytne confidence i když rozpoznání bylo úspěšné
+    if speech_result and confidence_float == 0.0:
+        logger.info(f"🔍 Speech result existuje ale confidence je 0 - pravděpodobně OK rozpoznání")
+        confidence_float = 0.5  # Nastavíme střední confidence pro pokračování
+
     # Zpracování připomenutí když uživatel neodpověděl
     if is_reminder:
         response.say(
