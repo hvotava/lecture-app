@@ -36,7 +36,7 @@ def create_lesson_0():
         {
             "question": "Jak se měří koncentrací obráběcí emulze?",
             "correct_answer": "Refraktometrem nebo titrací",
-            "keywords": ["refraktometr", "titrace", "měření"]
+            "keywords": ["refraktometr", "titrace"]
         },
         {
             "question": "Jaká je optimální koncentrace pro většinu obráběcích emulzí?",

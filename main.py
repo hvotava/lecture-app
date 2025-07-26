@@ -1974,7 +1974,7 @@ async def process_speech(request: Request):
         # Kontrola confidence threshold pro ASR
         confidence_float = float(confidence) if confidence else 0.0
 
-    LOW_CONFIDENCE_THRESHOLD = 0.3  # Práh pro nízkou jistotu
+    LOW_CONFIDENCE_THRESHOLD = 0.5  # Zvýšený práh pro lepší kontrolu
 
     # Pokud máme speech_result ale confidence je 0, pravděpodobně je to false positive
     # Twilio někdy neposkytne confidence i když rozpoznání bylo úspěšné
@@ -2230,37 +2230,44 @@ async def handle_entry_test(session, current_user, speech_result, response, clie
         # AI vyhodnocení podle nových instrukcí s vylepšeným matching algoritmem
         keywords = current_question.get('keywords', [])
         system_prompt = f"""ÚKOL:
-Vyhodnoť studentskou odpověď na zadanou otázku a porovnej ji s ideální správnou odpovědí a se seznamem klíčových slov.
+Vyhodnoť studentskou odpověď na zadanou otázku a porovnej ji s ideální správnou odpovědí.
 
 OTÁZKA: {current_question.get('question', '')}
 SPRÁVNÁ ODPOVĚĎ: {current_question.get('correct_answer', '')}
-KLÍČOVÁ SLOVA: {', '.join(keywords)}
 STUDENTSKÁ ODPOVĚĎ: "{speech_result}"
 
 DŮLEŽITÉ PRAVIDLA PRO VYHODNOCENÍ:
-1. SUBSTRING MATCHING: Klíčové slovo je považováno za správné, pokud je obsaženo jako substring v odpovědi nebo naopak.
-   - Příklad: 'refraktometr' najde v 'refraktometrický' ✅
-   - Příklad: 'chlazení' najde v 'ochlazen' ✅
-   - Příklad: 'separátor' najde v 'separátor oleje' ✅
+1. POROVNÁVÁNÍ SE SPRÁVNOU ODPOVĚDÍ: Hlavní kritérium je podobnost s ideální správnou odpovědí, ne klíčová slova.
 
-2. SYNONYMA A VARIANTY: Uznávej tyto varianty:
+2. ROZPOZNÁVÁNÍ CHYB ASR: Ber v úvahu možné chyby rozpoznávání řeči:
+   - 'operátorem' může být 'separátorem'
+   - 'chlazení' může být 'hlazení'
+   - 'mazání' může být 'mazaní'
+   - 'odvod' může být 'odvod'
+
+3. SYNONYMA A VARIANTY: Uznávej tyto varianty:
    - 'refraktometr' = 'refraktometrický', 'refraktometrické'
    - 'koncentrace' = 'koncentrovaný', 'koncentrovaná'
    - 'bakterie' = 'bakteriální', 'bakterií', 'bakteriálního'
    - 'pH' = 'ph', 'PH', 'ph hodnota'
    - 'emulze' = 'emulzní', 'emulzní kapalina'
    - 'chlazení' = 'chlazen', 'ochlazován', 'chlazená'
-   - 'separátor' = 'separátor oleje', 'separátorem'
+   - 'separátor' = 'separátor oleje', 'separátorem', 'operátorem'
    - 'odstranění' = 'odstranit', 'odstraňuje', 'odstraněno'
    - 'skimmer' = 'skimmerem', 'skimmeru'
 
-3. VYPOČET SKÓRE: Každé klíčové slovo má stejnou váhu. Skóre = (počet nalezených klíčových slov / celkový počet klíčových slov) * 100
+4. VYPOČET SKÓRE: 
+   - 100%: Odpověď obsahuje všechny klíčové koncepty ze správné odpovědi
+   - 80-99%: Odpověď obsahuje většinu klíčových konceptů
+   - 60-79%: Odpověď obsahuje některé klíčové koncepty
+   - 40-59%: Odpověď obsahuje málo klíčových konceptů
+   - 0-39%: Odpověď neobsahuje klíčové koncepty
 
 VÝSTUP:
 1. Procentuální skóre: Vypočítej podle pravidel výše
 2. Ultra krátká zpětná vazba (max. 1–2 věty):  
-   - Pokud chybí klíčová slova, vyjmenuj je stručně: „Chybí: …"  
-   - Pokud odpověď obsahuje všechna klíčová slova: „Výborně, úplná odpověď!"
+   - Pokud chybí klíčové koncepty, vyjmenuj je stručně: „Chybí: …"  
+   - Pokud odpověď obsahuje všechny klíčové koncepty: „Výborně, úplná odpověď!"
 
 Formát odpovědi: [FEEDBACK] [SKÓRE: XX%]"""
         
@@ -2414,7 +2421,10 @@ def log_answer_analysis(user_id: int, question: dict, user_answer: str, ai_score
                         'koncentrace': ['koncentrac', 'koncentraci', 'koncentrovat'],
                         'bakterie': ['bakterií', 'bakteriálního', 'mikroorganismy'],
                         'pH': ['ph', 'kyselost', 'kyselá', 'zásaditá'],
-                        'emulze': ['emulzní', 'emulgovat', 'emulgovaný']
+                        'emulze': ['emulzní', 'emulgovat', 'emulgovaný'],
+                        'separátor': ['separátor oleje', 'separátorem', 'operátorem', 'operátor'],
+                        'odstranění': ['odstranit', 'odstraňuje', 'odstraněno', 'odstraňování'],
+                        'skimmer': ['skimmerem', 'skimmeru', 'skimmer']
                     }
                     
                     if kw_lower in synonyms:
