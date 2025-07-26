@@ -1913,7 +1913,7 @@ async def process_speech(request: Request):
             
             if user_level == 0:
                 # === VSTUPNÍ TEST (LEKCE 0) ===
-                should_continue = await handle_entry_test(session, current_user, speech_result, response, client, attempt_id)
+                should_continue = await handle_entry_test(session, current_user, speech_result, response, client, attempt_id, confidence_float)
             else:
                 # === BĚŽNÉ LEKCE (1+) ===
                 should_continue = await handle_regular_lesson(session, current_user, user_level, speech_result, response, client)
@@ -1980,7 +1980,7 @@ async def process_speech(request: Request):
     return Response(content=str(response), media_type="text/xml")
 
 
-async def handle_entry_test(session, current_user, speech_result, response, client, attempt_id):
+async def handle_entry_test(session, current_user, speech_result, response, client, attempt_id, confidence_float):
     """Zpracování vstupního testu (Lekce 0)"""
     logger.info("🎯 Zpracovávám vstupní test...")
     
