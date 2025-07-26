@@ -1993,8 +1993,8 @@ async def process_speech(request: Request):
         # Pokračuj do normálního flow
     
     # Kontrola nízké confidence - požádej o zopakování
-    elif speech_result and confidence_float < LOW_CONFIDENCE_THRESHOLD:
-        logger.warning(f"⚠️ Nízká confidence {confidence_float:.2f} < {LOW_CONFIDENCE_THRESHOLD}, žádám o zopakování")
+    elif speech_result and confidence_float <= LOW_CONFIDENCE_THRESHOLD:
+        logger.warning(f"⚠️ Nízká confidence {confidence_float:.2f} <= {LOW_CONFIDENCE_THRESHOLD}, žádám o zopakování")
         
         response.say(
             f"Omlouvám se, nerozuměl jsem vám úplně jasně. Rozuměl jsem: '{speech_result}'. Je to správně?",
@@ -2146,7 +2146,7 @@ async def process_speech(request: Request):
         
         if user_level == 0:
             gather.say(
-                "Prosím odpovězte na otázku.",
+                "Píp.",
                 language="cs-CZ",
                 rate="0.9",
                 voice="Google.cs-CZ-Standard-A"
