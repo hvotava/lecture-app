@@ -1670,13 +1670,37 @@ async def voice_handler(request: Request):
     finally:
         session.close()
     
-    # Nové, lepší uvítání
-    response.say(
-        f"Ahoj, jsem tvůj lektor! Začínáme s {lesson_info}",
-        language="cs-CZ",
-        rate="0.9",
-        voice="Google.cs-CZ-Standard-A"
-    )
+    # Nové, lepší uvítání s první otázkou (pokud je to nová session)
+    if current_user and user_level == 0:
+        # Pro vstupní test zkontroluj, jestli už existuje aktivní session
+        test_session_check = session.query(TestSession).filter(
+            TestSession.user_id == current_user.id,
+            TestSession.lesson_id == target_lesson.id if target_lesson else None,
+            TestSession.is_completed == False
+        ).first()
+        
+        if not test_session_check and target_lesson:
+            # NOVÁ SESSION - řekni uvítání + první otázku
+            enabled_questions = []
+            if isinstance(target_lesson.questions, list):
+                enabled_questions = [
+                    q for q in target_lesson.questions 
+                    if isinstance(q, dict) and q.get('enabled', True)
+                ]
+            
+            if enabled_questions:
+                first_question = enabled_questions[0].get('question', '')
+                full_intro = f"Ahoj, jsem tvůj lektor! Začínáme s {lesson_info} Budeme procházet {len(enabled_questions)} otázek. První otázka: {first_question}"
+                response.say(full_intro, language="cs-CZ", rate="0.9", voice="Google.cs-CZ-Standard-A")
+                logger.info(f"🎯 Úvodní otázka řečena v voice_handler: {first_question}")
+            else:
+                response.say(f"Ahoj, jsem tvůj lektor! Začínáme s {lesson_info}", language="cs-CZ", rate="0.9", voice="Google.cs-CZ-Standard-A")
+        else:
+            # EXISTUJÍCÍ SESSION - pouze uvítání
+            response.say(f"Ahoj, jsem tvůj lektor! Pokračujeme v testu.", language="cs-CZ", rate="0.9", voice="Google.cs-CZ-Standard-A")
+    else:
+        # Běžné lekce
+        response.say(f"Ahoj, jsem tvůj lektor! Začínáme s {lesson_info}", language="cs-CZ", rate="0.9", voice="Google.cs-CZ-Standard-A")
     
     # Kratší pauza a přechod do action
     response.pause(length=1)
@@ -1725,11 +1749,37 @@ async def process_speech(request: Request):
     confidence = form.get('Confidence', '0')
     attempt_id = request.query_params.get('attempt_id')
     is_reminder = request.query_params.get('reminder') == 'true'
+    is_confirmation = request.query_params.get('confirmation') == 'true'
+    original_text = request.query_params.get('original_text', '')
     
     logger.info(f"📝 Rozpoznaná řeč: '{speech_result}' (confidence: {confidence})")
-    logger.info(f"🔗 attempt_id: {attempt_id}, reminder: {is_reminder}")
+    logger.info(f"🔗 attempt_id: {attempt_id}, reminder: {is_reminder}, confirmation: {is_confirmation}")
     
     response = VoiceResponse()
+    
+    # Zpracování confirmation workflow
+    if is_confirmation and original_text:
+        logger.info(f"🔄 Zpracovávám confirmation pro původní text: '{original_text}'")
+        
+        # Zkontroluj jestli uživatel potvrdil ("ano", "yes", "správně", atd.)
+        confirmation_words = ['ano', 'yes', 'správně', 'jo', 'jasně', 'přesně', 'souhlasím']
+        speech_lower = speech_result.lower()
+        
+        if any(word in speech_lower for word in confirmation_words):
+            # Potvrzeno - použij původní text
+            speech_result = original_text
+            logger.info(f"✅ Uživatel potvrdil, používám původní text: '{speech_result}'")
+        else:
+            # Nepotvrzeno - použij nový text
+            logger.info(f"❌ Uživatel nepotvrdil, používám nový text: '{speech_result}'")
+        
+        # Pokračuj normálním flow (bez dalších confidence kontrol)
+        confidence_float = 1.0  # Nastavíme vysokou confidence aby se přeskočily další kontroly
+    else:
+        # Kontrola confidence threshold pro ASR
+        confidence_float = float(confidence) if confidence else 0.0
+    
+    LOW_CONFIDENCE_THRESHOLD = 0.3  # Práh pro nízkou jistotu
     
     # Zpracování připomenutí když uživatel neodpověděl
     if is_reminder:
@@ -1740,6 +1790,45 @@ async def process_speech(request: Request):
             voice="Google.cs-CZ-Standard-A"
         )
         # Pokračuj do normálního flow
+    
+    # Kontrola nízké confidence - požádej o zopakování
+    elif speech_result and confidence_float < LOW_CONFIDENCE_THRESHOLD:
+        logger.warning(f"⚠️ Nízká confidence {confidence_float:.2f} < {LOW_CONFIDENCE_THRESHOLD}, žádám o zopakování")
+        
+        response.say(
+            f"Omlouvám se, nerozuměl jsem vám úplně jasně. Rozuměl jsem: '{speech_result}'. Je to správně?",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        
+        gather = response.gather(
+            input='speech',
+            timeout=10,
+            speech_timeout=3,
+            action=f'/voice/process?confirmation=true&original_text={speech_result}',
+            method='POST',
+            language='cs-CZ',
+            speech_model='phone_call',
+            enhanced='true'
+        )
+        
+        gather.say(
+            "Řekněte 'ano' pokud je to správně, nebo zopakujte vaši odpověď.",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        
+        response.say(
+            "Nerozuměl jsem vám. Zkuste to prosím znovu.",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        response.redirect('/voice/process?reminder=true')
+        
+        return Response(content=str(response), media_type="text/xml")
     
     # Pokud je odpověď prázdná a není to reminder
     if not speech_result and not is_reminder:
@@ -1921,17 +2010,9 @@ async def handle_entry_test(session, current_user, speech_result, response, clie
     
     # Rozlišení: NOVÁ session (první otázka) vs EXISTUJÍCÍ session (odpověď)
     if not existing_active_session:
-        # NOVÁ SESSION - položit první otázku
-        current_question = get_current_question(test_session)
-        if current_question:
-            question_text = current_question.get('question', '')
-            welcome_text = f"Začínáme s testem! Budeme procházet {test_session.total_questions} otázek. První otázka: {question_text}"
-            response.say(welcome_text, language="cs-CZ", rate="0.9")
-            logger.info(f"🎯 První otázka: {question_text}")
-            return True
-        else:
-            response.say("Chyba při načítání otázky.", language="cs-CZ")
-            return False
+        # NOVÁ SESSION - první otázka už byla řečena v voice_handler
+        logger.info(f"🎯 Nová session vytvořena, první otázka už byla řečena")
+        return True
     else:
         # EXISTUJÍCÍ SESSION - vyhodnotit odpověď
         logger.info(f"💬 Vyhodnocuji odpověď: '{speech_result}'")
@@ -1969,6 +2050,16 @@ Student odpověděl: "{speech_result}"
             score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
             current_score = int(score_match.group(1)) if score_match else 0
             clean_feedback = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
+            
+            # Vylepšené logování před uložením odpovědi
+            log_answer_analysis(
+                user_id=current_user.id,
+                question=current_question,
+                user_answer=speech_result,
+                ai_score=current_score,
+                ai_feedback=clean_feedback,
+                confidence=confidence_float
+            )
             
             # Uložení odpovědi a posun
             updated_session = save_answer_and_advance(
@@ -2008,6 +2099,67 @@ Student odpověděl: "{speech_result}"
             logger.error(f"❌ AI chyba: {e}")
             response.say("Chyba při vyhodnocování odpovědi.", language="cs-CZ")
             return False
+
+
+def log_answer_analysis(user_id: int, question: dict, user_answer: str, ai_score: int, ai_feedback: str, confidence: float):
+    """Detailní logování odpovědi pro analýzu typických chyb"""
+    try:
+        question_text = question.get('question', 'N/A')
+        correct_answer = question.get('correct_answer', 'N/A')
+        keywords = question.get('keywords', [])
+        
+        logger.info(f"""
+📊 === ANALÝZA ODPOVĚDI ===
+👤 User ID: {user_id}
+❓ Otázka: {question_text}
+✅ Správná odpověď: {correct_answer}
+🔑 Klíčová slova: {', '.join(keywords) if keywords else 'žádná'}
+💬 Odpověď uživatele: '{user_answer}'
+🎯 AI skóre: {ai_score}%
+📝 AI feedback: {ai_feedback}
+🎤 Speech confidence: {confidence:.2f}
+📏 Délka odpovědi: {len(user_answer)} znaků, {len(user_answer.split())} slov
+===========================""")
+        
+        # Analýza typických problémů
+        issues = []
+        
+        # Příliš krátká odpověď
+        if len(user_answer.split()) < 2:
+            issues.append("KRÁTKÁ_ODPOVĚĎ")
+        
+        # Nízká confidence
+        if confidence < 0.3:
+            issues.append("NÍZKÁ_CONFIDENCE")
+        elif confidence < 0.5:
+            issues.append("STŘEDNÍ_CONFIDENCE")
+        
+        # Nízké skóre
+        if ai_score < 30:
+            issues.append("VELMI_NÍZKÉ_SKÓRE")
+        elif ai_score < 60:
+            issues.append("NÍZKÉ_SKÓRE")
+        
+        # Chybějící klíčová slova
+        if keywords:
+            found_keywords = [kw for kw in keywords if kw.lower() in user_answer.lower()]
+            missing_keywords = [kw for kw in keywords if kw.lower() not in user_answer.lower()]
+            
+            if not found_keywords:
+                issues.append("ŽÁDNÁ_KLÍČOVÁ_SLOVA")
+            elif len(found_keywords) < len(keywords) / 2:
+                issues.append("MÁLO_KLÍČOVÝCH_SLOV")
+                
+            logger.info(f"🔍 Nalezená klíčová slova: {found_keywords}")
+            logger.info(f"❌ Chybějící klíčová slova: {missing_keywords}")
+        
+        if issues:
+            logger.warning(f"⚠️ Identifikované problémy: {', '.join(issues)}")
+        else:
+            logger.info(f"✅ Odpověď bez evidentních problémů")
+            
+    except Exception as e:
+        logger.error(f"❌ Chyba při logování analýzy: {e}")
 
 
 async def handle_regular_lesson(session, current_user, user_level, speech_result, response, client):
@@ -3174,6 +3326,17 @@ def save_answer_and_advance(test_session_id: int, user_answer: str, score: float
             # Aktualizuj průměrné skóre
             test_session.current_score = sum(test_session.scores) / len(test_session.scores)
             
+            # Detailní logování uložené odpovědi
+            question_num = test_session.current_question_index + 1
+            logger.info(f"""
+💾 === ODPOVĚĎ ULOŽENA ===
+🔢 Otázka: {question_num}/{test_session.total_questions}
+📝 Uživatel: "{user_answer}"
+🎯 Skóre: {score}%
+💬 Feedback: "{feedback}"
+📊 Průměr: {test_session.current_score:.1f}%
+=========================""")
+            
             # Posuň na další otázku
             test_session.current_question_index += 1
             
@@ -3181,7 +3344,35 @@ def save_answer_and_advance(test_session_id: int, user_answer: str, score: float
             if test_session.current_question_index >= test_session.total_questions:
                 test_session.is_completed = True
                 test_session.completed_at = datetime.utcnow()
-                logger.info(f"✅ Test session {test_session_id} dokončena s průměrným skóre {test_session.current_score:.1f}%")
+                
+                # Detailní logování dokončení testu
+                total_answers = len(test_session.answers)
+                average_score = test_session.current_score
+                scores_list = test_session.scores
+                
+                logger.info(f"""
+🏁 === TEST DOKONČEN ===
+🆔 Session ID: {test_session_id}
+📊 Celkové skóre: {average_score:.1f}%
+📈 Jednotlivá skóre: {scores_list}
+📋 Počet otázek: {total_answers}/{test_session.total_questions}
+⏱️ Dokončeno: {test_session.completed_at}
+=========================""")
+                
+                # Statistiky výkonu
+                if scores_list:
+                    max_score = max(scores_list)
+                    min_score = min(scores_list)
+                    scores_above_80 = len([s for s in scores_list if s >= 80])
+                    scores_below_50 = len([s for s in scores_list if s < 50])
+                    
+                    logger.info(f"""
+📈 === STATISTIKY VÝKONU ===
+🔥 Nejvyšší skóre: {max_score}%
+❄️ Nejnižší skóre: {min_score}%
+✅ Otázky nad 80%: {scores_above_80}/{total_answers}
+❌ Otázky pod 50%: {scores_below_50}/{total_answers}
+===============================""")
             
             # Oznám SQLAlchemy o změnách v JSON sloupcích
             from sqlalchemy.orm.attributes import flag_modified
