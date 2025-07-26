@@ -1515,22 +1515,13 @@ def root():
 
 @app.post("/")
 async def root_post(request: Request, attempt_id: str = Query(None)):
-    """Twilio někdy volá root endpoint místo /voice/ - přesměrujeme na stejnou logiku"""
+    """Twilio někdy volá root endpoint místo /voice/ - použijeme stejnou logiku"""
     logger.info("Přijat Twilio webhook na ROOT / endpoint")
     logger.info(f"Attempt ID: {attempt_id}")
     
-    # Stejná TwiML odpověď jako v /voice/
-    response = """<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Vítejte u AI asistenta pro výuku jazyků.</Say>
-    <Say language="cs-CZ" rate="0.9" voice="Google.cs-CZ-Standard-A">Nyní vás připojuji k AI asistentovi.</Say>
-    <Start>
-        <Stream url="wss://lecture-app-production.up.railway.app/audio" track="both_tracks" statusCallback="https://lecture-app-production.up.railway.app/stream-callback" />
-    </Start>
-    <Pause length="3600"/>
-</Response>"""
-    logger.info(f"TwiML odpověď z ROOT: {response}")
-    return Response(content=response, media_type="text/xml")
+    # PŘESMĚRUJ NA /voice/ handler pro konzistentní chování
+    logger.info("🔄 Přesměrovávám ROOT request na voice_handler")
+    return await voice_handler(request)
 
 @app.get("/health")
 def health():
@@ -1752,6 +1743,11 @@ async def process_speech(request: Request):
     is_confirmation = request.query_params.get('confirmation') == 'true'
     original_text = request.query_params.get('original_text', '')
     
+    # URL decode original_text pokud je potřeba
+    if original_text:
+        from urllib.parse import unquote_plus
+        original_text = unquote_plus(original_text)
+    
     logger.info(f"📝 Rozpoznaná řeč: '{speech_result}' (confidence: {confidence})")
     logger.info(f"🔗 attempt_id: {attempt_id}, reminder: {is_reminder}, confirmation: {is_confirmation}")
     
@@ -1759,19 +1755,25 @@ async def process_speech(request: Request):
     
     # Zpracování confirmation workflow
     if is_confirmation and original_text:
-        logger.info(f"🔄 Zpracovávám confirmation pro původní text: '{original_text}'")
+        logger.info(f"🔄 === CONFIRMATION WORKFLOW ===")
+        logger.info(f"📋 Původní text: '{original_text}'")
+        logger.info(f"🎤 Nová odpověď: '{speech_result}'")
         
         # Zkontroluj jestli uživatel potvrdil ("ano", "yes", "správně", atd.)
         confirmation_words = ['ano', 'yes', 'správně', 'jo', 'jasně', 'přesně', 'souhlasím']
         speech_lower = speech_result.lower()
         
-        if any(word in speech_lower for word in confirmation_words):
+        found_confirmation = [word for word in confirmation_words if word in speech_lower]
+        
+        if found_confirmation:
             # Potvrzeno - použij původní text
             speech_result = original_text
-            logger.info(f"✅ Uživatel potvrdil, používám původní text: '{speech_result}'")
+            logger.info(f"✅ POTVRZENO ('{found_confirmation[0]}') → používám původní: '{speech_result}'")
         else:
             # Nepotvrzeno - použij nový text
-            logger.info(f"❌ Uživatel nepotvrdil, používám nový text: '{speech_result}'")
+            logger.info(f"❌ NEPOTVRZENO → používám nový text: '{speech_result}'")
+        
+        logger.info(f"🎯 Finální text pro zpracování: '{speech_result}'")
         
         # Pokračuj normálním flow (bez dalších confidence kontrol)
         confidence_float = 1.0  # Nastavíme vysokou confidence aby se přeskočily další kontroly
@@ -1802,11 +1804,15 @@ async def process_speech(request: Request):
             voice="Google.cs-CZ-Standard-A"
         )
         
+        # URL encode pro bezpečné předání parametrů
+        from urllib.parse import quote_plus
+        encoded_text = quote_plus(speech_result)
+        
         gather = response.gather(
             input='speech',
             timeout=10,
             speech_timeout=3,
-            action=f'/voice/process?confirmation=true&original_text={speech_result}',
+            action=f'/voice/process?confirmation=true&original_text={encoded_text}',
             method='POST',
             language='cs-CZ',
             speech_model='phone_call',
