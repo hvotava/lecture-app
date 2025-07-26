@@ -759,33 +759,111 @@ def admin_list_lessons(request: Request):
 
 @admin_router.get("/lessons/new", response_class=HTMLResponse, name="admin_new_lesson_get")
 def admin_new_lesson_get(request: Request):
-    form = {"title": "", "language": "cs", "script": "", "questions": "", "title.errors": [], "language.errors": [], "script.errors": [], "questions.errors": []}
+    form = {
+        "title": "", "language": "cs", "script": "", "questions": "",
+        "description": "", "lesson_number": "0", "lesson_type": "standard", "required_score": "90.0",
+        "title.errors": [], "language.errors": [], "script.errors": [], "questions.errors": [],
+        "description.errors": [], "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
+    }
     return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
 
 @admin_router.post("/lessons/new", response_class=HTMLResponse)
-def admin_new_lesson_post(request: Request, title: str = Form(...), language: str = Form(...), script: str = Form(...), questions: str = Form("")):
-    errors = {"title": [], "language": [], "script": [], "questions": []}
-    if not title:
-        errors["title"].append("Název je povinný.")
-    if language not in ["cs", "en"]:
-        errors["language"].append("Neplatný jazyk.")
-    if not script:
-        errors["script"].append("Skript je povinný.")
-    if any(errors.values()):
-        form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": errors["title"], "language.errors": errors["language"], "script.errors": errors["script"], "questions.errors": errors["questions"]}
-        return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
-    lesson = Lesson(title=title, language=language, script=script, questions=questions)
-    session = SessionLocal()
-    session.add(lesson)
+async def admin_new_lesson_post(request: Request):
     try:
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": [str(e)], "language.errors": [], "script.errors": [], "questions.errors": []}
+        form_data = await request.form()
+        
+        title = form_data.get("title", "")
+        language = form_data.get("language", "cs")
+        script = form_data.get("script", "")
+        questions = form_data.get("questions", "")
+        description = form_data.get("description", "")
+        lesson_number = form_data.get("lesson_number", "0")
+        lesson_type = form_data.get("lesson_type", "standard")
+        required_score = form_data.get("required_score", "90.0")
+        
+        errors = {"title": [], "language": [], "script": [], "questions": [], "lesson_number": [], "lesson_type": [], "required_score": [], "description": []}
+        
+        # Validace
+        if not title:
+            errors["title"].append("Název je povinný.")
+        if language not in ["cs", "en"]:
+            errors["language"].append("Neplatný jazyk.")
+        if not script:
+            errors["script"].append("Skript je povinný.")
+        
+        # Validace lesson_number
+        try:
+            lesson_number_int = int(lesson_number)
+            if lesson_number_int < 0 or lesson_number_int > 100:
+                errors["lesson_number"].append("Číslo lekce musí být mezi 0-100.")
+        except ValueError:
+            errors["lesson_number"].append("Číslo lekce musí být číslo.")
+            lesson_number_int = 0
+        
+        # Validace required_score
+        try:
+            required_score_float = float(required_score)
+            if required_score_float < 0 or required_score_float > 100:
+                errors["required_score"].append("Skóre musí být mezi 0-100%.")
+        except ValueError:
+            errors["required_score"].append("Skóre musí být číslo.")
+            required_score_float = 90.0
+        
+        if lesson_type not in ["entry_test", "standard", "advanced"]:
+            errors["lesson_type"].append("Neplatný typ lekce.")
+        
+        if any(errors.values()):
+            form = {
+                "title": title, "language": language, "script": script, "questions": questions,
+                "description": description, "lesson_number": lesson_number, "lesson_type": lesson_type, 
+                "required_score": required_score,
+                "title.errors": errors["title"], "language.errors": errors["language"], 
+                "script.errors": errors["script"], "questions.errors": errors["questions"],
+                "description.errors": errors["description"], "lesson_number.errors": errors["lesson_number"],
+                "lesson_type.errors": errors["lesson_type"], "required_score.errors": errors["required_score"]
+            }
+            return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
+    
+        # Vytvoření lekce
+        lesson = Lesson(
+            title=title,
+            language=language,
+            script=script,
+            questions=questions,
+            description=description,
+            lesson_number=lesson_number_int,
+            lesson_type=lesson_type,
+            required_score=required_score_float
+        )
+        
+        session = SessionLocal()
+        session.add(lesson)
+        try:
+            session.commit()
+            logger.info(f"✅ Nová lekce vytvořena: {title} (číslo={lesson_number_int}, typ={lesson_type})")
+        except Exception as e:
+            session.rollback()
+            form = {
+                "title": title, "language": language, "script": script, "questions": questions,
+                "description": description, "lesson_number": lesson_number, "lesson_type": lesson_type,
+                "required_score": required_score, "title.errors": [str(e)], "language.errors": [], 
+                "script.errors": [], "questions.errors": [], "description.errors": [], 
+                "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
+            }
+            session.close()
+            return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
         session.close()
+        return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
+        
+    except Exception as e:
+        logger.error(f"❌ Chyba při vytváření lekce: {e}")
+        form = {
+            "title": "", "language": "cs", "script": "", "questions": "",
+            "description": "", "lesson_number": "0", "lesson_type": "standard", "required_score": "90.0",
+            "title.errors": [f"Chyba: {str(e)}"], "language.errors": [], "script.errors": [], "questions.errors": [],
+            "description.errors": [], "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
+        }
         return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
-    session.close()
-    return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
 
 @admin_router.get("/lessons/{id}/edit", response_class=HTMLResponse, name="admin_edit_lesson_get")
 def admin_edit_lesson_get(request: Request, id: int = Path(...)):
@@ -800,8 +878,19 @@ def admin_edit_lesson_get(request: Request, id: int = Path(...)):
         session.close()
         return templates.TemplateResponse("lessons/edit.html", {"request": request, "lesson": lesson})
     
-    # Pro staré lekce použij původní template
-    form = {"title": lesson.title, "language": lesson.language, "script": lesson.script, "questions": lesson.questions, "title.errors": [], "language.errors": [], "script.errors": [], "questions.errors": []}
+    # Pro staré lekce použij původní template s novými poli
+    form = {
+        "title": lesson.title, 
+        "language": lesson.language, 
+        "script": lesson.script, 
+        "questions": lesson.questions,
+        "description": getattr(lesson, 'description', ''),
+        "lesson_number": getattr(lesson, 'lesson_number', 0),
+        "lesson_type": getattr(lesson, 'lesson_type', 'standard'),
+        "required_score": getattr(lesson, 'required_score', 90.0),
+        "title.errors": [], "language.errors": [], "script.errors": [], "questions.errors": [],
+        "description.errors": [], "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
+    }
     session.close()
     return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
 
@@ -858,13 +947,21 @@ async def admin_edit_lesson_post(request: Request, id: int = Path(...)):
             session.close()
             return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
         
-        # Pro staré lekce - původní logika
+        # Pro staré lekce - rozšířená logika s novými poli
         title = form_data.get("title", "")
         language = form_data.get("language", "cs")
         script = form_data.get("script", "")
         questions = form_data.get("questions", "")
+        description = form_data.get("description", "")
         
-        errors = {"title": [], "language": [], "script": [], "questions": []}
+        # Nová pole
+        lesson_number = form_data.get("lesson_number", "0")
+        lesson_type = form_data.get("lesson_type", "standard")
+        required_score = form_data.get("required_score", "90.0")
+        
+        errors = {"title": [], "language": [], "script": [], "questions": [], "lesson_number": [], "lesson_type": [], "required_score": [], "description": []}
+        
+        # Validace
         if not title:
             errors["title"].append("Název je povinný.")
         if language not in ["cs", "en"]:
@@ -872,16 +969,52 @@ async def admin_edit_lesson_post(request: Request, id: int = Path(...)):
         if not script:
             errors["script"].append("Skript je povinný.")
         
+        # Validace lesson_number
+        try:
+            lesson_number_int = int(lesson_number)
+            if lesson_number_int < 0 or lesson_number_int > 100:
+                errors["lesson_number"].append("Číslo lekce musí být mezi 0-100.")
+        except ValueError:
+            errors["lesson_number"].append("Číslo lekce musí být číslo.")
+            lesson_number_int = 0
+        
+        # Validace required_score
+        try:
+            required_score_float = float(required_score)
+            if required_score_float < 0 or required_score_float > 100:
+                errors["required_score"].append("Skóre musí být mezi 0-100%.")
+        except ValueError:
+            errors["required_score"].append("Skóre musí být číslo.")
+            required_score_float = 90.0
+        
+        if lesson_type not in ["entry_test", "standard", "advanced"]:
+            errors["lesson_type"].append("Neplatný typ lekce.")
+        
         if any(errors.values()):
-            form = {"title": title, "language": language, "script": script, "questions": questions, "title.errors": errors["title"], "language.errors": errors["language"], "script.errors": errors["script"], "questions.errors": errors["questions"]}
+            form = {
+                "title": title, "language": language, "script": script, "questions": questions,
+                "description": description, "lesson_number": lesson_number, "lesson_type": lesson_type, 
+                "required_score": required_score,
+                "title.errors": errors["title"], "language.errors": errors["language"], 
+                "script.errors": errors["script"], "questions.errors": errors["questions"],
+                "description.errors": errors["description"], "lesson_number.errors": errors["lesson_number"],
+                "lesson_type.errors": errors["lesson_type"], "required_score.errors": errors["required_score"]
+            }
             session.close()
             return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
         
+        # Aktualizace lekce
         lesson.title = title
         lesson.language = language
         lesson.script = script
         lesson.questions = questions
+        lesson.description = description
+        lesson.lesson_number = lesson_number_int
+        lesson.lesson_type = lesson_type
+        lesson.required_score = required_score_float
+        
         session.commit()
+        logger.info(f"✅ Lekce {lesson.id} aktualizována: číslo={lesson_number_int}, typ={lesson_type}")
         
     except Exception as e:
         session.rollback()
@@ -1434,7 +1567,8 @@ async def voice_call_handler(request: Request):
 @app.post("/voice/")
 async def voice_handler(request: Request):
     logger.info("Přijat Twilio webhook na /voice/")
-    logger.info(f"Attempt ID: {request.query_params.get('attempt_id')}")
+    attempt_id = request.query_params.get('attempt_id')
+    logger.info(f"Attempt ID: {attempt_id}")
     
     # Získání parametrů hovoru
     form = await request.form()
@@ -1444,422 +1578,437 @@ async def voice_handler(request: Request):
     
     response = VoiceResponse()
     
-    # Uvítání s funkčním TTS
+    # Inteligentní uvítání podle aktuální lekce uživatele
+    session = SessionLocal()
+    try:
+        current_user = None
+        current_lesson = None
+        lesson_info = ""
+        
+        # Pokusíme se najít uživatele podle attempt_id
+        if attempt_id:
+            try:
+                attempt = session.query(Attempt).get(int(attempt_id))
+                if attempt:
+                    current_user = attempt.user
+                    current_lesson = attempt.lesson
+            except:
+                pass
+        
+        # Pokud není attempt, najdi posledního uživatele
+        if not current_user:
+            current_user = session.query(User).order_by(User.id.desc()).first()
+        
+        if current_user:
+            # Získej aktuální úroveň uživatele
+            user_level = getattr(current_user, 'current_lesson_level', 0)
+            
+            # Najdi správnou lekci podle úrovně
+            if user_level == 0:
+                target_lesson = session.query(Lesson).filter(
+                    Lesson.lesson_number == 0
+                ).first()
+                if target_lesson:
+                    lesson_info = f"Lekce {target_lesson.lesson_number}: Vstupní test z obráběcích kapalin. Hned začneme s testem!"
+                else:
+                    lesson_info = "Lekce 0: Vstupní test. Hned začneme!"
+            else:
+                target_lesson = session.query(Lesson).filter(
+                    Lesson.lesson_number == user_level
+                ).first()
+                if target_lesson:
+                    lesson_info = f"Lekce {target_lesson.lesson_number}: {target_lesson.title.replace(f'Lekce {target_lesson.lesson_number}:', '').strip()}. Začínáme s výukou!"
+                else:
+                    lesson_info = f"Lekce {user_level}. Začínáme s výukou!"
+    except Exception as e:
+        logger.error(f"Chyba při načítání lekce: {e}")
+        lesson_info = "Lekce 0: Vstupní test. Hned začneme!"
+    finally:
+        session.close()
+    
+    # Nové, lepší uvítání
     response.say(
-        "Vítejte u AI asistenta pro výuku jazyků!",
+        f"Ahoj, jsem tvůj lektor! Začínáme s {lesson_info}",
         language="cs-CZ",
         rate="0.9",
         voice="Google.cs-CZ-Standard-A"
     )
     
-    response.say(
-        "Můžete se mě zeptat na cokoliv nebo mi říct, co vás zajímá.",
-        language="cs-CZ",
-        rate="0.9",
-        voice="Google.cs-CZ-Standard-A"
-    )
+    # Kratší pauza a přechod do action
+    response.pause(length=1)
     
-    # Gather pro zachycení hlasového vstupu
+    # Gather s vylepšenými parametry pro lepší detekci konce odpovědi
     gather = response.gather(
         input='speech',
-        timeout=10,
-        speech_timeout='auto',
+        timeout=8,  # Kratší základní timeout
+        speech_timeout=3,  # Konkrétní hodnota místo 'auto' pro lepší detekci konce
         action='/voice/process',
         method='POST',
         language='cs-CZ',
-        speech_model='phone_call'
+        speech_model='phone_call',
+        partial_result_callback='',  # Zakážeme partial results pro čistší zpracování
+        enhanced='true'  # Vylepšené rozpoznávání
     )
     
     gather.say(
-        "Mluvte prosím, naslouchám...",
+        "Naslouchám...",
         language="cs-CZ",
         rate="0.9",
         voice="Google.cs-CZ-Standard-A"
     )
     
-    # Fallback pokud uživatel neodpoví
+    # Vylepšený fallback s možností připomenutí
     response.say(
-        "Nerozuměl jsem vám. Zkuste to prosím znovu nebo hovor ukončete.",
+        "Nerozuměl jsem vám nebo jste neodpověděl. Zkuste mluvit jasně a výrazně.",
         language="cs-CZ",
         rate="0.9",
         voice="Google.cs-CZ-Standard-A"
     )
     
-    response.hangup()
+    # Nabídka opakování
+    response.redirect('/voice/process?reminder=true')
     
-    logger.info(f"TwiML odpověď (hybridní): {response}")
+    logger.info(f"TwiML odpověď s inteligentním uvítáním: {response}")
     return Response(content=str(response), media_type="text/xml")
 
 @app.post("/voice/process")
 async def process_speech(request: Request):
-    """Zpracuje hlasový vstup od uživatele s inteligentním systémem lekcí"""
-    logger.info("🎙️ === PROCESS_SPEECH ZAČÁTEK ===")
+    """Vylepšené zpracování hlasového vstupu s inteligentním flow"""
+    logger.info("🎙️ === PROCESS_SPEECH START ===")
     
     form = await request.form()
-    speech_result = form.get('SpeechResult', '')
+    speech_result = form.get('SpeechResult', '').strip()
     confidence = form.get('Confidence', '0')
     attempt_id = request.query_params.get('attempt_id')
+    is_reminder = request.query_params.get('reminder') == 'true'
     
     logger.info(f"📝 Rozpoznaná řeč: '{speech_result}' (confidence: {confidence})")
-    logger.info(f"🔗 attempt_id: {attempt_id}")
+    logger.info(f"🔗 attempt_id: {attempt_id}, reminder: {is_reminder}")
     
     response = VoiceResponse()
     
-    # Inicializace proměnných pro řízení toku
-    user_level = -1
-    should_continue_test = False
+    # Zpracování připomenutí když uživatel neodpověděl
+    if is_reminder:
+        response.say(
+            "Připomínám - pokud mi nerozumíte nebo potřebujete čas na zamyšlení, řekněte to prosím nahlas.",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        # Pokračuj do normálního flow
     
-    if speech_result:
-        logger.info(f"✅ Speech result není prázdný, pokračuji ve zpracování...")
+    # Pokud je odpověď prázdná a není to reminder
+    if not speech_result and not is_reminder:
+        response.say(
+            "Nerozuměl jsem vám nebo jste neodpověděl. Zkuste mluvit jasně a zřetelně.",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        
+        # Vylepšený gather s lepšími parametry
+        gather = response.gather(
+            input='speech',
+            timeout=10,
+            speech_timeout=4,  # Delší speech_timeout pro lepší detekci konce
+            action='/voice/process',
+            method='POST',
+            language='cs-CZ',
+            speech_model='phone_call',
+            enhanced='true'
+        )
+        
+        gather.say(
+            "Zkuste to prosím znovu. Naslouchám...",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        
+        response.say(
+            "Pokud máte potíže s připojením, zkuste zavolat znovu.",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        response.hangup()
+        
+        return Response(content=str(response), media_type="text/xml")
+    
+    # Hlavní zpracování s OpenAI
+    try:
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        if not openai_api_key:
+            response.say("AI služba není dostupná.", language="cs-CZ")
+            response.hangup()
+            return Response(content=str(response), media_type="text/xml")
+        
+        import openai
+        client = openai.OpenAI(api_key=openai_api_key)
+        
+        session = SessionLocal()
+        current_user = None
+        user_level = 0
+        should_continue = False
+        
         try:
-            openai_api_key = os.getenv('OPENAI_API_KEY')
-            logger.info(f"🔑 OpenAI API key: {'✅ Nastaven' if openai_api_key else '❌ Chybí'}")
-            if openai_api_key:
-                import openai
-                client = openai.OpenAI(api_key=openai_api_key)
-                
-                logger.info("🤖 Generuji odpověď pomocí OpenAI GPT...")
-                
-                # Získej attempt_id z query parametrů
-                attempt_id = request.query_params.get('attempt_id')
-                current_lesson = None
-                current_user = None
-                lesson_content = ""
-                
-                session = SessionLocal()
+            # Načtení uživatele
+            if attempt_id:
                 try:
-                    if attempt_id:
-                        attempt = session.query(Attempt).get(int(attempt_id))
-                        if attempt:
-                            current_lesson = attempt.lesson
-                            current_user = attempt.user
-                            logger.info(f"👤 Uživatel: {current_user.name}, Lekce: {current_lesson.title}")
-                    
-                    # Pokud není attempt, najdi posledního uživatele
-                    if not current_user:
-                        current_user = session.query(User).order_by(User.id.desc()).first()
-                    
-                    if not current_user:
-                        logger.error("❌ Žádný uživatel nenalezen!")
-                        session.close()
-                        response.say("Omlouvám se, došlo k technické chybě.", language="cs-CZ")
-                        response.hangup()
-                        return Response(content=str(response), media_type="text/xml")
-                    
-                    # INTELIGENTNÍ VÝBĚR LEKCE PODLE POKROKU UŽIVATELE
-                    user_level = getattr(current_user, 'current_lesson_level', 0)
-                    logger.info(f"🎯 Uživatel je na úrovni: {user_level}")
-                    
-                    # Najdi správnou lekci podle úrovně uživatele
-                    if user_level == 0:
-                        logger.info("🎯 Uživatel je na úrovni 0 - hledám Lekci 0...")
-                        # VSTUPNÍ TEST - STRUKTUROVANÉ OTÁZKY
-                        target_lesson = session.query(Lesson).filter(
-                            Lesson.title.contains("Lekce 0")
-                        ).first()
-                        
-                        if target_lesson:
-                            logger.info(f"✅ Nalezena Lekce 0: {target_lesson.title}")
-                        else:
-                            logger.error("❌ Lekce 0 nebyla nalezena v databázi!")
-                        
-                        if target_lesson:
-                            # Získej nebo vytvoř test session
-                            test_session = get_or_create_test_session(
-                                user_id=current_user.id,
-                                lesson_id=target_lesson.id,
-                                attempt_id=int(attempt_id) if attempt_id else None
-                            )
-                            
-                            # NOVÁ LOGIKA: Test session je vždy nová, takže VŽDY začni úvodem
-                            speech_words = speech_result.strip().split() if speech_result.strip() else []
-                            
-                            logger.info(f"🔍 Analýza vstupu: '{speech_result}' ({len(speech_words)} slov)")
-                            logger.info(f"🔍 Test session stav: index={test_session.current_question_index}, answers={len(test_session.answers)}, total={test_session.total_questions}")
-                            
-                            # KONTROLA: Je to první otázka v nové session?
-                            if test_session.current_question_index == 0 and len(test_session.answers) == 0:
-                                # PRVNÍ OTÁZKA - Položi ji
-                                current_question = get_current_question(test_session)
-                                if current_question:
-                                    question_text = current_question.get('question', '')
-                                    welcome_text = f"Vítejte u vstupního testu z obráběcích kapalin! Budeme procházet {test_session.total_questions} otázek. První otázka: {question_text}"
-                                    response.say(welcome_text, language="cs-CZ", rate="0.9")
-                                    logger.info(f"🎯 Položena první otázka: {question_text}")
-                                else:
-                                    response.say("Chyba při načítání otázky.", language="cs-CZ")
-                            else:
-                                # VYHODNOCENÍ ODPOVĚDI A DALŠÍ OTÁZKA
-                                current_question = get_current_question(test_session)
-                                if current_question and speech_result.strip():
-                                    # Vyhodnoť odpověď pomocí AI
-                                    system_prompt = f"""Jsi AI examinátor pro vstupní test z obráběcích kapalin a servisu.
+                    attempt = session.query(Attempt).get(int(attempt_id))
+                    if attempt:
+                        current_user = attempt.user
+                except:
+                    pass
+            
+            if not current_user:
+                current_user = session.query(User).order_by(User.id.desc()).first()
+            
+            if not current_user:
+                response.say("Technická chyba - uživatel nenalezen.", language="cs-CZ")
+                response.hangup()
+                return Response(content=str(response), media_type="text/xml")
+            
+            user_level = getattr(current_user, 'current_lesson_level', 0)
+            logger.info(f"👤 Uživatel: {current_user.name}, Úroveň: {user_level}")
+            
+            if user_level == 0:
+                # === VSTUPNÍ TEST (LEKCE 0) ===
+                should_continue = await handle_entry_test(session, current_user, speech_result, response, client, attempt_id)
+            else:
+                # === BĚŽNÉ LEKCE (1+) ===
+                should_continue = await handle_regular_lesson(session, current_user, user_level, speech_result, response, client)
+                
+        except Exception as db_error:
+            logger.error(f"❌ DB chyba: {db_error}")
+            response.say("Došlo k technické chybě. Zkuste to prosím později.", language="cs-CZ")
+            response.hangup()
+            return Response(content=str(response), media_type="text/xml")
+        finally:
+            session.close()
+    
+    except Exception as e:
+        logger.error(f"❌ Celková chyba: {e}")
+        response.say("Došlo k neočekávané chybě.", language="cs-CZ")
+        response.hangup()
+        return Response(content=str(response), media_type="text/xml")
+    
+    # === POKRAČOVÁNÍ KONVERZACE ===
+    if should_continue:
+        gather = response.gather(
+            input='speech',
+            timeout=15,  # Delší timeout pro úvahu
+            speech_timeout=4,  # Lepší detekce konce odpovědi
+            action='/voice/process',
+            method='POST',
+            language='cs-CZ',
+            speech_model='phone_call',
+            enhanced='true'
+        )
+        
+        if user_level == 0:
+            gather.say(
+                "Prosím odpovězte na otázku.",
+                language="cs-CZ",
+                rate="0.9",
+                voice="Google.cs-CZ-Standard-A"
+            )
+        else:
+            gather.say(
+                "Máte další otázku?",
+                language="cs-CZ",
+                rate="0.9",
+                voice="Google.cs-CZ-Standard-A"
+            )
+        
+        # Vylepšený fallback
+        response.say(
+            "Nerozuměl jsem vaší odpovědi. Zkuste mluvit jasně nebo řekněte 'konec' pro ukončení.",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        response.redirect('/voice/process?reminder=true')
+    else:
+        response.say(
+            "Děkuji za rozhovor. Na shledanou!",
+            language="cs-CZ",
+            rate="0.9",
+            voice="Google.cs-CZ-Standard-A"
+        )
+        response.hangup()
+    
+    return Response(content=str(response), media_type="text/xml")
 
-TESTOVACÍ OTÁZKA:
-{current_question.get('question', '')}
 
-SPRÁVNÁ ODPOVĚĎ:
-{current_question.get('correct_answer', '')}
+async def handle_entry_test(session, current_user, speech_result, response, client, attempt_id):
+    """Zpracování vstupního testu (Lekce 0)"""
+    logger.info("🎯 Zpracovávám vstupní test...")
+    
+    # Najdi Lekci 0
+    target_lesson = session.query(Lesson).filter(
+        Lesson.lesson_number == 0
+    ).first()
+    
+    if not target_lesson:
+        target_lesson = session.query(Lesson).filter(
+            Lesson.title.contains("Lekce 0")
+        ).first()
+    
+    if not target_lesson:
+        response.say("Vstupní test nebyl nalezen. Kontaktujte administrátora.", language="cs-CZ")
+        return False
+    
+    # Získej nebo vytvoř test session
+    test_session = get_or_create_test_session(
+        user_id=current_user.id,
+        lesson_id=target_lesson.id,
+        attempt_id=int(attempt_id) if attempt_id else None
+    )
+    
+    # První spuštění - položit první otázku
+    if test_session.current_question_index == 0 and len(test_session.answers) == 0:
+        current_question = get_current_question(test_session)
+        if current_question:
+            question_text = current_question.get('question', '')
+            welcome_text = f"Začínáme s testem! Budeme procházet {test_session.total_questions} otázek. První otázka: {question_text}"
+            response.say(welcome_text, language="cs-CZ", rate="0.9")
+            logger.info(f"🎯 První otázka: {question_text}")
+            return True
+        else:
+            response.say("Chyba při načítání otázky.", language="cs-CZ")
+            return False
+    
+    # Vyhodnocení odpovědi a další otázka
+    current_question = get_current_question(test_session)
+    if not current_question or not speech_result:
+        response.say("Nerozuměl jsem vaší odpovědi. Zkuste to prosím znovu.", language="cs-CZ")
+        return True
+    
+    # AI vyhodnocení
+    system_prompt = f"""Jsi AI examinátor pro vstupní test z obráběcích kapalin.
 
-KLÍČOVÁ SLOVA:
-{', '.join(current_question.get('keywords', []))}
+OTÁZKA: {current_question.get('question', '')}
+SPRÁVNÁ ODPOVĚĎ: {current_question.get('correct_answer', '')}
+KLÍČOVÁ SLOVA: {', '.join(current_question.get('keywords', []))}
 
-INSTRUKCE:
-1. Porovnej odpověď studenta se správnou odpovědí s tolerancí pro podobná slova
-2. Vyhodnoť na škále 0-100% (buď tolerantní k synonymům)
-3. Poskytni krátkou zpětnou vazbu (max 2 věty)
-4. POVINNĚ přidej na konec: [SKÓRE: XX%]
-
-PŘÍKLAD: "Správně! Obráběcí kapaliny skutečně slouží k chlazení a mazání. [SKÓRE: 90%]"
+Vyhodnoť odpověď studenta (0-100%). Buď tolerantní k synonymům.
+Poskytni krátkou zpětnou vazbu a na konec přidej: [SKÓRE: XX%]
 
 Student odpověděl: "{speech_result}"
-Vyhodnoť jeho odpověď."""
+"""
+    
+    try:
+        gpt_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": system_prompt}],
+            max_tokens=150,
+            temperature=0.3
+        )
+        
+        ai_answer = gpt_response.choices[0].message.content
+        
+        # Extrakce skóre
+        import re
+        score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
+        current_score = int(score_match.group(1)) if score_match else 0
+        clean_feedback = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
+        
+        # Uložení odpovědi a posun
+        updated_session = save_answer_and_advance(
+            test_session.id, 
+            speech_result, 
+            float(current_score), 
+            clean_feedback
+        )
+        
+        if updated_session and updated_session.get('is_completed'):
+            # Test dokončen
+            final_score = updated_session.get('current_score', 0)
+            total_questions = len(updated_session.get('answers', []))
+            
+            if final_score >= 90:
+                current_user.current_lesson_level = 1
+                session.commit()
+                final_message = f"{clean_feedback} Test dokončen! Skóre: {final_score:.1f}% z {total_questions} otázek. Gratulujeme, postoupili jste do Lekce 1!"
+            else:
+                final_message = f"{clean_feedback} Test dokončen. Skóre: {final_score:.1f}% z {total_questions} otázek. Pro postup potřebujete 90%. Můžete zkusit znovu!"
+            
+            response.say(final_message, language="cs-CZ", rate="0.9")
+            return False  # Ukončit konverzaci
+        else:
+            # Další otázka
+            next_question = get_current_question(updated_session)
+            if next_question:
+                progress = f"({updated_session.get('current_question_index', 0)}/{updated_session.get('total_questions', 0)})"
+                next_text = f"{clean_feedback} Další otázka {progress}: {next_question.get('question', '')}"
+                response.say(next_text, language="cs-CZ", rate="0.9")
+                return True  # Pokračovat
+            else:
+                response.say("Chyba při načítání další otázky.", language="cs-CZ")
+                return False
+                
+    except Exception as e:
+        logger.error(f"❌ AI chyba: {e}")
+        response.say("Chyba při vyhodnocování odpovědi.", language="cs-CZ")
+        return False
 
-                                    gpt_response = client.chat.completions.create(
-                                        model="gpt-4o-mini",
-                                        messages=[
-                                            {"role": "system", "content": system_prompt}
-                                        ],
-                                        max_tokens=150,
-                                        temperature=0.3
-                                    )
-                                    
-                                    ai_answer = gpt_response.choices[0].message.content
-                                    
-                                    # Extrakce skóre
-                                    import re
-                                    score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
-                                    current_score = int(score_match.group(1)) if score_match else 0
-                                    clean_feedback = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
-                                    
-                                    # Uložení odpovědi a posun na další otázku
-                                    updated_session = save_answer_and_advance(
-                                        test_session.id, 
-                                        speech_result, 
-                                        float(current_score), 
-                                        clean_feedback
-                                    )
-                                    
-                                    if updated_session:
-                                        if updated_session.get('is_completed'):
-                                            # TEST DOKONČEN
-                                            final_score = updated_session.get('current_score', 0)
-                                            total_questions = len(updated_session.get('answers', []))
-                                            
-                                            if final_score >= 90:
-                                                # ÚSPĚŠNÝ POSTUP
-                                                current_user.current_lesson_level = 1
-                                                session.commit()
-                                                final_message = f"{clean_feedback} Test dokončen! Celkové skóre: {final_score:.1f}% z {total_questions} otázek. Gratulujeme, postoupili jste do Lekce 1!"
-                                            else:
-                                                # NEÚSPĚŠNÝ POKUS
-                                                final_message = f"{clean_feedback} Test dokončen. Celkové skóre: {final_score:.1f}% z {total_questions} otázek. Pro postup potřebujete alespoň 90%. Můžete zkusit znovu!"
-                                            
-                                            response.say(final_message, language="cs-CZ", rate="0.9")
-                                            logger.info(f"🏁 Test dokončen: {final_score:.1f}% z {total_questions} otázek")
-                                        else:
-                                            # DALŠÍ OTÁZKA
-                                            next_question = get_current_question(updated_session)
-                                            if next_question:
-                                                progress = f"({updated_session.get('current_question_index', 0)}/{updated_session.get('total_questions', 0)})"
-                                                next_text = f"{clean_feedback} Další otázka {progress}: {next_question.get('question', '')}"
-                                                response.say(next_text, language="cs-CZ", rate="0.9")
-                                                logger.info(f"🎯 Další otázka {progress}: {next_question.get('question', '')}")
-                                            else:
-                                                response.say("Chyba při načítání další otázky.", language="cs-CZ")
-                                    else:
-                                        response.say("Chyba při ukládání odpovědi.", language="cs-CZ")
-                                else:
-                                    response.say("Nerozuměl jsem vaší odpovědi. Zkuste to prosím znovu.", language="cs-CZ")
-                        else:
-                            response.say("Vstupní test nebyl nalezen. Kontaktujte administrátora.", language="cs-CZ")
-                    
-                    elif user_level >= 1:
-                        # ŠKOLNÍ LEKCE - najdi lekci podle úrovně
-                        target_lesson = session.query(Lesson).filter(
-                            Lesson.level == "beginner"
-                        ).first()
-                        
-                        if target_lesson and target_lesson.script:
-                            lesson_content = target_lesson.script
-                            
-                            # AUTOMATICKÉ GENEROVÁNÍ OTÁZEK Z OBSAHU LEKCE
-                            from app.services.openai_service import OpenAIService
-                            openai_service = OpenAIService()
-                            
-                            # Generuj 10 náhodných otázek z obsahu lekce
-                            generated_questions = openai_service.generate_questions_from_lesson(
-                                lesson_script=lesson_content,
-                                language="cs",
-                                num_questions=10
-                            )
-                            
-                            if generated_questions:
-                                # Vyber náhodnou otázku pro testování
-                                import random
-                                test_question = random.choice(generated_questions)
-                                
-                                system_prompt = f"""Jsi AI učitel pro lekci: {target_lesson.title}
+
+async def handle_regular_lesson(session, current_user, user_level, speech_result, response, client):
+    """Zpracování běžných lekcí (1+)"""
+    logger.info(f"📚 Zpracovávám lekci úrovně {user_level}")
+    
+    # Najdi lekci podle čísla
+    target_lesson = session.query(Lesson).filter(
+        Lesson.lesson_number == user_level
+    ).first()
+    
+    if not target_lesson:
+        # Fallback - najdi podle úrovně
+        target_lesson = session.query(Lesson).filter(
+            Lesson.level == "beginner"
+        ).first()
+    
+    if not target_lesson:
+        response.say(f"Lekce {user_level} nebyla nalezena. Kontaktujte administrátora.", language="cs-CZ")
+        return False
+    
+    logger.info(f"✅ Nalezena lekce: {target_lesson.title}")
+    
+    # Obecná konverzace nebo testování
+    lesson_content = target_lesson.script or target_lesson.description or ""
+    
+    # Jednoduchý AI chat o lekci
+    system_prompt = f"""Jsi AI lektor pro lekci: {target_lesson.title}
 
 OBSAH LEKCE:
-{lesson_content[:500]}...
-
-TESTOVACÍ OTÁZKA:
-{test_question.get('question', '')}
-
-SPRÁVNÁ ODPOVĚĎ:
-{test_question.get('correct_answer', '')}
+{lesson_content[:800]}
 
 INSTRUKCE:
-1. Vyhodnoť odpověď studenta podle obsahu lekce
-2. Porovnej se správnou odpovědí
-3. Poskytni konstruktivní zpětnou vazbu
-4. POVINNĚ přidej skóre: [SKÓRE: XX%]
+1. Odpovídej na otázky studenta o lekci
+2. Buď věcný a srozumitelný
+3. Pokud student chce test, připrav otázku
+4. Udržuj rozhovor aktivní
 
-Student odpověděl: "{speech_result}"
-Vyhodnoť jeho odpověď podle lekce."""
-
-                                gpt_response = client.chat.completions.create(
-                                    model="gpt-4o-mini",
-                                    messages=[
-                                        {"role": "system", "content": system_prompt}
-                                    ],
-                                    max_tokens=200,
-                                    temperature=0.4
-                                )
-                                
-                                ai_answer = gpt_response.choices[0].message.content
-                                
-                                # Extrakce skóre
-                                import re
-                                score_match = re.search(r'\[SKÓRE:\s*(\d+)%\]', ai_answer)
-                                current_score = int(score_match.group(1)) if score_match else 0
-                                clean_answer = re.sub(r'\[SKÓRE:\s*\d+%\]', '', ai_answer).strip()
-                                
-                                logger.info(f"📊 Lekce {user_level} skóre: {current_score}%")
-                                
-                                # Kontrola postupu do další lekce
-                                if current_score >= 90:
-                                    current_user.current_lesson_level = user_level + 1
-                                    session.commit()
-                                    clean_answer += f" Výborně! Dosáhli jste {current_score}% a postoupili do další lekce!"
-                                    logger.info(f"🎉 Uživatel postoupil do lekce {user_level + 1}")
-                                else:
-                                    clean_answer += f" Dosáhli jste {current_score}%. Pro postup potřebujete alespoň 90%."
-                                
-                                response.say(clean_answer, language="cs-CZ", rate="0.9")
-                            else:
-                                # Fallback - obecná konverzace o lekci
-                                system_prompt = f"""Jsi AI učitel. Odpovídej na otázky o této lekci:
-
-{lesson_content}
-
-Student se zeptal: "{speech_result}"
-Odpověz mu jasně a srozumitelně v češtině."""
-
-                                gpt_response = client.chat.completions.create(
-                                    model="gpt-4o-mini",
-                                    messages=[
-                                        {"role": "system", "content": system_prompt}
-                                    ],
-                                    max_tokens=150,
-                                    temperature=0.7
-                                )
-                                
-                                ai_answer = gpt_response.choices[0].message.content
-                                response.say(ai_answer, language="cs-CZ", rate="0.9")
-                        else:
-                            response.say("Lekce pro vaši úroveň nebyla nalezena. Kontaktujte administrátora.", language="cs-CZ")
-                    
-                    # URČENÍ DALŠÍHO KROKU PŘED ZAVŘENÍM SESSION
-                    should_continue_test = False
-                    if user_level == 0:
-                        # Zkontroluj, jestli je test stále aktivní
-                        test_session = session.query(TestSession).filter_by(
-                            user_id=current_user.id,
-                            is_completed=False
-                        ).first()
-                        should_continue_test = test_session and not test_session.is_completed
-                
-                except Exception as db_error:
-                    logger.error(f"❌ Chyba při práci s databází: {db_error}")
-                    response.say("Došlo k technické chybě. Zkuste to prosím později.", language="cs-CZ")
-                    should_continue_test = False
-                    user_level = -1  # Chyba
-                finally:
-                    session.close()
-            else:
-                logger.warning("⚠️ OPENAI_API_KEY není nastaven")
-                response.say("AI služba není dostupná.", language="cs-CZ")
-        
-        except Exception as e:
-            logger.error(f"❌ Chyba při zpracování: {e}")
-            response.say("Došlo k neočekávané chybě.", language="cs-CZ")
-        
-        # UPRAVENÁ LOGIKA: Další kolo konverzace pouze pokud nejsme v aktivním testu
-        if user_level == 0:
-            # VSTUPNÍ TEST - čekáme na odpověď na otázku
-            if should_continue_test:
-                # Pokud je test aktivní, přidáme gather pro odpověď na otázku
-                gather = response.gather(
-                    input='speech',
-                    timeout=30,  # Delší timeout pro zamyšlení
-                    action='/voice/process',
-                    method='POST',
-                    language='cs-CZ',
-                    speech_model='phone_call'
-                )
-                
-                gather.say(
-                    "Prosím odpovězte na otázku.",
-                    language="cs-CZ",
-                    rate="0.9"
-                )
-                
-                response.say(
-                    "Nerozuměl jsem vaší odpovědi. Zkuste to prosím znovu.",
-                    language="cs-CZ",
-                    rate="0.9"
-                )
-            else:
-                # Test dokončen nebo neaktivní
-                response.say(
-                    "Test je dokončen. Děkuji za účast!",
-                    language="cs-CZ",
-                    rate="0.9"
-                )
-        else:
-            # BĚŽNÉ LEKCE - obecná konverzace
-            gather = response.gather(
-                input='speech',
-                timeout=15,
-                action='/voice/process',
-                method='POST',
-                language='cs-CZ',
-                speech_model='phone_call'
-            )
-            
-            gather.say(
-                "Máte další otázku nebo chcete pokračovat?",
-                language="cs-CZ",
-                rate="0.9"
-            )
-            
-            response.say(
-                "Děkuji za rozhovor. Na shledanou!",
-                language="cs-CZ",
-                rate="0.9"
-            )
-    else:
-        logger.warning(f"❌ Speech result je prázdný: '{speech_result}'")
-        response.say(
-            "Nerozuměl jsem vám. Hovor ukončuji.",
-            language="cs-CZ",
-            rate="0.9"
-        )
+Student řekl: "{speech_result}"
+Odpověz mu v češtině (max 2 věty)."""
     
-    response.hangup()
-    return Response(content=str(response), media_type="text/xml")
+    try:
+        gpt_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": system_prompt}],
+            max_tokens=200,
+            temperature=0.6
+        )
+        
+        ai_answer = gpt_response.choices[0].message.content
+        response.say(ai_answer, language="cs-CZ", rate="0.9")
+        return True  # Pokračovat v konverzaci
+        
+    except Exception as e:
+        logger.error(f"❌ AI chyba: {e}")
+        response.say("Chyba při zpracování dotazu.", language="cs-CZ")
+        return False
 
 @app.post("/voice/start-stream/")
 async def voice_start_stream(request: Request):

@@ -27,9 +27,9 @@ class Lesson(Base):
     script = mapped_column(Text, nullable=False, default="")  # Změněno na nullable=False s default
     questions = mapped_column(JSON, nullable=False)
     level = mapped_column(String(20), nullable=False, default="beginner")
-    # lesson_number = mapped_column(Integer, nullable=False, default=0)  # DOČASNĚ VYPNUTO
-    # required_score = mapped_column(Float, nullable=False, default=90.0)  # DOČASNĚ VYPNUTO
-    # lesson_type = mapped_column(String(20), nullable=False, default="standard")  # DOČASNĚ VYPNUTO
+    lesson_number = mapped_column(Integer, nullable=False, default=0)  # Číslo lekce (0=vstupní test, 1+=běžné lekce)
+    required_score = mapped_column(Float, nullable=False, default=90.0)  # Požadované skóre pro úspěch
+    lesson_type = mapped_column(String(20), nullable=False, default="standard")  # Typ lekce (entry_test, standard, advanced)
     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     attempts = relationship("Attempt", back_populates="lesson")
     

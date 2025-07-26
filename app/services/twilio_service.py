@@ -14,9 +14,10 @@ from twilio.twiml.voice_response import Connect, Stream
 
 logger = logging.getLogger(__name__)
 
-# Nastavení podrobnějšího logování
-logging.basicConfig(level=logging.DEBUG)
-logger.setLevel(logging.DEBUG)
+# Nastavení logování - potlačíme verbose výstup z python_multipart
+logging.basicConfig(level=logging.INFO)
+logger.setLevel(logging.DEBUG)  # Zachováme DEBUG pro vlastní kód
+logging.getLogger('python_multipart.multipart').setLevel(logging.WARNING)  # Potlačíme verbose multipart debug
 
 # Slovník předvoleb a odpovídajících jazyků
 COUNTRY_CODES = {

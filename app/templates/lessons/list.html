@@ -21,6 +21,7 @@
     <table class="table table-striped">
         <thead>
             <tr>
+                <th>Číslo</th>
                 <th>Název</th>
                 <th>Typ</th>
                 <th>Otázky</th>
@@ -32,6 +33,17 @@
         <tbody>
             {% for lesson in lessons %}
             <tr>
+                <td>
+                    {% if hasattr(lesson, 'lesson_number') and lesson.lesson_number is not none %}
+                        {% if lesson.lesson_number == 0 %}
+                            <span class="badge bg-warning text-dark">{{ lesson.lesson_number }}</span>
+                        {% else %}
+                            <span class="badge bg-primary">{{ lesson.lesson_number }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="badge bg-secondary">-</span>
+                    {% endif %}
+                </td>
                 <td>
                     <strong>{{ lesson.title }}</strong>
                     {% if lesson.description %}
