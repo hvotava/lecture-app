@@ -2028,7 +2028,7 @@ async def handle_entry_test(session, current_user, speech_result, response, clie
             response.say("Nerozuměl jsem vaší odpovědi. Zkuste to prosím znovu.", language="cs-CZ")
             return True
         
-        # AI vyhodnocení podle nových instrukcí
+        # AI vyhodnocení podle nových instrukcí s vylepšeným matching algoritmem
         keywords = current_question.get('keywords', [])
         system_prompt = f"""ÚKOL:
 Vyhodnoť studentskou odpověď na zadanou otázku a porovnej ji s ideální správnou odpovědí a se seznamem klíčových slov.
@@ -2038,8 +2038,27 @@ SPRÁVNÁ ODPOVĚĎ: {current_question.get('correct_answer', '')}
 KLÍČOVÁ SLOVA: {', '.join(keywords)}
 STUDENTSKÁ ODPOVĚĎ: "{speech_result}"
 
+DŮLEŽITÉ PRAVIDLA PRO VYHODNOCENÍ:
+1. SUBSTRING MATCHING: Klíčové slovo je považováno za správné, pokud je obsaženo jako substring v odpovědi nebo naopak.
+   - Příklad: 'refraktometr' najde v 'refraktometrický' ✅
+   - Příklad: 'chlazení' najde v 'ochlazen' ✅
+   - Příklad: 'separátor' najde v 'separátor oleje' ✅
+
+2. SYNONYMA A VARIANTY: Uznávej tyto varianty:
+   - 'refraktometr' = 'refraktometrický', 'refraktometrické'
+   - 'koncentrace' = 'koncentrovaný', 'koncentrovaná'
+   - 'bakterie' = 'bakteriální', 'bakterií', 'bakteriálního'
+   - 'pH' = 'ph', 'PH', 'ph hodnota'
+   - 'emulze' = 'emulzní', 'emulzní kapalina'
+   - 'chlazení' = 'chlazen', 'ochlazován', 'chlazená'
+   - 'separátor' = 'separátor oleje', 'separátorem'
+   - 'odstranění' = 'odstranit', 'odstraňuje', 'odstraněno'
+   - 'skimmer' = 'skimmerem', 'skimmeru'
+
+3. VYPOČET SKÓRE: Každé klíčové slovo má stejnou váhu. Skóre = (počet nalezených klíčových slov / celkový počet klíčových slov) * 100
+
 VÝSTUP:
-1. Procentuální skóre: Vypočítej, kolik procent z klíčových slov student ve své odpovědi správně použil (každé klíčové slovo má stejnou váhu).
+1. Procentuální skóre: Vypočítej podle pravidel výše
 2. Ultra krátká zpětná vazba (max. 1–2 věty):  
    - Pokud chybí klíčová slova, vyjmenuj je stručně: „Chybí: …"  
    - Pokud odpověď obsahuje všechna klíčová slova: „Výborně, úplná odpověď!"
