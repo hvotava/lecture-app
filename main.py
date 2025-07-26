@@ -2241,6 +2241,7 @@ DŮLEŽITÉ PRAVIDLA PRO VYHODNOCENÍ:
 
 2. ROZPOZNÁVÁNÍ CHYB ASR: Ber v úvahu možné chyby rozpoznávání řeči:
    - 'operátorem' = 'separátorem' (ČASTÁ CHYBA ASR!)
+   - 'reparátor' = 'separátor' (ČASTÁ CHYBA ASR!)
    - 'chlazení' = 'hlazení'
    - 'mazání' = 'mazaní'
    - 'odvod' = 'odvod'
@@ -2252,7 +2253,7 @@ DŮLEŽITÉ PRAVIDLA PRO VYHODNOCENÍ:
    - 'pH' = 'ph', 'PH', 'ph hodnota'
    - 'emulze' = 'emulzní', 'emulzní kapalina'
    - 'chlazení' = 'chlazen', 'ochlazován', 'chlazená'
-   - 'separátor' = 'separátor oleje', 'separátorem', 'separátoru', 'operátorem', 'operátor'
+   - 'separátor' = 'separátor oleje', 'separátorem', 'separátoru', 'operátorem', 'operátor', 'reparátor', 'reparátorem'
    - 'odstranění' = 'odstranit', 'odstraňuje', 'odstraněno', 'odstraňování'
    - 'skimmer' = 'skimmerem', 'skimmeru', 'skimmer'
 
@@ -2261,7 +2262,11 @@ DŮLEŽITÉ PRAVIDLA PRO VYHODNOCENÍ:
    - Pokud student řekne 'separátor', považuj to za 'separátorem' (stejný význam)!
    - Různé tvary slov mají stejný význam: 'separátor' = 'separátorem' = 'separátoru'
 
-5. ROZPOZNÁVÁNÍ KOŘENŮ SLOV:
+5. PRAVIDLO PRO ČÁSTEČNÉ SHODY:
+   - Pokud student zmíní hlavní koncept (např. 'separátor'), ale chybí upřesnění (např. 'oleje'), stále to považuj za správné, pokud je kontext jasný.
+   - Příklad: Na otázku "Jak se odstraňuje tramp oil?" je odpověď "separátorem" správná, i když ideální je "separátorem oleje".
+
+6. ROZPOZNÁVÁNÍ KOŘENŮ SLOV:
    - Pokud kořen slova je správný, považuj to za správné
    - Příklad: 'chlazení' = 'chlazen', 'chlazená', 'chlazený', 'ochlazování'
    - Příklad: 'mazání' = 'mazan', 'mazaný', 'mazán', 'mazání'
@@ -2272,7 +2277,7 @@ DŮLEŽITÉ PRAVIDLA PRO VYHODNOCENÍ:
    - Příklad: 'koncentrace' = 'koncentrovaný', 'koncentrovaná', 'koncentrovat'
    - Příklad: 'bakterie' = 'bakteriální', 'bakterií', 'bakteriálního'
 
-6. VYPOČET SKÓRE: 
+7. VYPOČET SKÓRE: 
    - 100%: Odpověď obsahuje všechny klíčové koncepty ze správné odpovědi
    - 80-99%: Odpověď obsahuje většinu klíčových konceptů
    - 60-79%: Odpověď obsahuje některé klíčové koncepty
@@ -2438,7 +2443,7 @@ def log_answer_analysis(user_id: int, question: dict, user_answer: str, ai_score
                         'bakterie': ['bakterií', 'bakteriálního', 'mikroorganismy'],
                         'pH': ['ph', 'kyselost', 'kyselá', 'zásaditá'],
                         'emulze': ['emulzní', 'emulgovat', 'emulgovaný'],
-                        'separátor': ['separátor oleje', 'separátorem', 'operátorem', 'operátor'],
+                        'separátor': ['separátor oleje', 'separátorem', 'operátorem', 'operátor', 'reparátor', 'reparátorem'],
                         'odstranění': ['odstranit', 'odstraňuje', 'odstraněno', 'odstraňování'],
                         'skimmer': ['skimmerem', 'skimmeru', 'skimmer']
                     }
