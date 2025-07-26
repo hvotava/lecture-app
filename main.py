@@ -2164,27 +2164,56 @@ def log_answer_analysis(user_id: int, question: dict, user_answer: str, ai_score
             missing_keywords = []
             
             for kw in keywords:
-                # Tolerantní hledání - i částečné shody
-                if kw.lower() in user_answer.lower():
+                kw_lower = kw.lower()
+                answer_lower = user_answer.lower()
+                found_match = False
+                match_type = ""
+                
+                # 1. PŘESNÁ SHODA
+                if kw_lower in answer_lower:
                     found_keywords.append(kw)
-                else:
-                    # Hledej synonyma nebo podobná slova
+                    found_match = True
+                    match_type = "přesná"
+                
+                # 2. SUBSTRING MATCHING (hotfix) - klíčové slovo jako součást delšího slova
+                elif not found_match:
+                    # Hledej klíčové slovo jako substring v libovolném slově odpovědi
+                    words_in_answer = answer_lower.split()
+                    for word in words_in_answer:
+                        if kw_lower in word or word in kw_lower:
+                            found_keywords.append(f"{kw}({word})")
+                            found_match = True
+                            match_type = "substring"
+                            break
+                
+                # 3. SYNONYMA A VARIANTY (rozšířený seznam)
+                if not found_match:
                     synonyms = {
-                        'chlazení': ['hlazení', 'chladění', 'ochlazování'],
-                        'mazání': ['mazaní', 'lubrication'],
-                        'odvod': ['odvedení', 'odvádění']
+                        'chlazení': ['hlazení', 'chladění', 'ochlazování', 'chlazen', 'ochlazován'],
+                        'mazání': ['mazaní', 'lubrication', 'lubrikace', 'mazan', 'mazán'],
+                        'odvod': ['odvedení', 'odvádění', 'odváděn', 'odváděný'],
+                        'refraktometr': ['refraktometric', 'refraktometrický', 'refraktometrů'],
+                        'koncentrace': ['koncentrac', 'koncentraci', 'koncentrovat'],
+                        'bakterie': ['bakterií', 'bakteriálního', 'mikroorganismy'],
+                        'pH': ['ph', 'kyselost', 'kyselá', 'zásaditá'],
+                        'emulze': ['emulzní', 'emulgovat', 'emulgovaný']
                     }
                     
-                    found_synonym = False
-                    if kw.lower() in synonyms:
-                        for syn in synonyms[kw.lower()]:
-                            if syn in user_answer.lower():
+                    if kw_lower in synonyms:
+                        for syn in synonyms[kw_lower]:
+                            if syn in answer_lower:
                                 found_keywords.append(f"{kw}({syn})")
-                                found_synonym = True
+                                found_match = True
+                                match_type = "synonymum"
                                 break
+                
+                # 4. POKUD NEBYLO NALEZENO
+                if not found_match:
+                    missing_keywords.append(kw)
                     
-                    if not found_synonym:
-                        missing_keywords.append(kw)
+                # Log pro debug
+                if found_match:
+                    logger.debug(f"✓ '{kw}' nalezeno jako {match_type}: {found_keywords[-1]}")
             
             # Výpočet pokrytí klíčových slov
             keyword_coverage = len(found_keywords) / len(keywords) * 100 if keywords else 0
@@ -2194,9 +2223,15 @@ def log_answer_analysis(user_id: int, question: dict, user_answer: str, ai_score
             elif keyword_coverage < 50:
                 issues.append("MÁLO_KLÍČOVÝCH_SLOV")
                 
-            logger.info(f"🔍 Nalezená klíčová slova ({len(found_keywords)}/{len(keywords)}): {found_keywords}")
-            logger.info(f"❌ Chybějící klíčová slova: {missing_keywords}")
-            logger.info(f"📊 Pokrytí klíčových slov: {keyword_coverage:.1f}%")
+            # Detailní breakdown matchingu
+            exact_matches = [kw for kw in found_keywords if '(' not in str(kw)]
+            fuzzy_matches = [kw for kw in found_keywords if '(' in str(kw)]
+            
+            logger.info(f"🔍 ANALÝZA KLÍČOVÝCH SLOV ({len(found_keywords)}/{len(keywords)}):")
+            logger.info(f"  ✅ Přesné shody: {exact_matches}")
+            logger.info(f"  🔄 Fuzzy/substring shody: {fuzzy_matches}")
+            logger.info(f"  ❌ Chybějící: {missing_keywords}")
+            logger.info(f"📊 Celkové pokrytí: {keyword_coverage:.1f}%")
         
         if issues:
             logger.warning(f"⚠️ Identifikované problémy: {', '.join(issues)}")
