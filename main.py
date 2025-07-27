@@ -3746,12 +3746,26 @@ def save_answer_and_advance(test_session_id: int, user_answer: str, score: float
         
         if len(test_session.answers) >= test_session.total_questions:
             test_session.is_completed = True
-            # ... (zbytek logiky zůstává stejný)
+            test_session.completed_at = datetime.utcnow()
         
-        # ... (zbytek logiky zůstává stejný)
+        # KRITICKÉ: Oznámení SQLAlchemy o změnách JSON sloupců
+        flag_modified(test_session, 'answers')
+        flag_modified(test_session, 'scores')
+        flag_modified(test_session, 'failed_categories')
+        
+        # KRITICKÉ: Commit změn do databáze
+        session.commit()
         
         return {
-            # ... (zbytek logiky zůstává stejný)
+            'id': test_session.id,
+            'current_question_index': test_session.current_question_index,
+            'total_questions': test_session.total_questions,
+            'questions_data': test_session.questions_data,
+            'answers': test_session.answers,
+            'scores': test_session.scores,
+            'current_score': test_session.current_score,
+            'is_completed': test_session.is_completed,
+            'completed_at': test_session.completed_at,
             'failed_categories': test_session.failed_categories,
             'difficulty_score': getattr(test_session, 'difficulty_score', 50.0)
         }
