@@ -30,6 +30,7 @@ import time
 import tempfile
 from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean, Float, ForeignKey, text
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm.attributes import flag_modified
 from fastapi.staticfiles import StaticFiles
 from admin_dashboard import DashboardStats
 
