@@ -24,13 +24,13 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Exponujeme port (Railway automaticky nastaví PORT proměnnou)
-EXPOSE 8080
+EXPOSE 8000
 
 # Spustíme aplikaci s více logováním
 CMD sh -c 'echo "=== STARTING APPLICATION ===" && \
-    echo "PORT: ${PORT:-8080}" && \
+    echo "PORT: ${PORT:-8000}" && \
     echo "PWD: $(pwd)" && \
     echo "Files in current directory:" && \
     ls -la && \
     echo "=== STARTING UVICORN ===" && \
-    uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --log-level info'
+    uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --log-level info'

@@ -1742,7 +1742,7 @@ async def root():
             "status": "healthy",
             "message": "Lecture App FastAPI běží!", 
             "endpoints": ["/health", "/voice/", "/voice/media-stream"],
-            "port": os.getenv('PORT', '8080'),
+            "port": os.getenv('PORT', '8000'),
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
