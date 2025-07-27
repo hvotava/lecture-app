@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="fas fa-edit"></i> Editace lekce
+                    {% if lesson.title.startswith("Lekce 0") %}
+                        <span class="badge badge-warning">Vstupní test</span>
+                    {% endif %}
+                </h2>
+                <a href="{{ request.url_for('admin_list_lessons') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Zpět na lekce
+                </a>
+            </div>
+
+            <form method="post">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-info-circle"></i> Základní informace</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="title">Název lekce:</label>
+                            <input type="text" class="form-control" id="title" name="title" value="{{ lesson.title }}" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="description">Popis:</label>
+                            <textarea class="form-control" id="description" name="description" rows="3">{{ lesson.description }}</textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="level">Úroveň:</label>
+                            <select class="form-control" id="level" name="level">
+                                <option value="entry_test" {% if lesson.level == "entry_test" %}selected{% endif %}>Vstupní test</option>
+                                <option value="beginner" {% if lesson.level == "beginner" %}selected{% endif %}>Začátečník</option>
+                                <option value="intermediate" {% if lesson.level == "intermediate" %}selected{% endif %}>Pokročilý</option>
+                                <option value="advanced" {% if lesson.level == "advanced" %}selected{% endif %}>Expert</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="fas fa-question-circle"></i> Otázky ({{ lesson.questions|length }})</h5>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-success" onclick="selectAll(true)">
+                                <i class="fas fa-check-square"></i> Vybrat vše
+                            </button>
+                            <button type="button" class="btn btn-sm btn-warning" onclick="selectAll(false)">
+                                <i class="fas fa-square"></i> Zrušit výběr
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        {% if lesson.questions %}
+                            <div class="row">
+                                {% for question in lesson.questions %}
+                                <div class="col-md-6 mb-3">
+                                    <div class="card question-card">
+                                        <div class="card-body">
+                                            <div class="form-check mb-2">
+                                                <input 
+                                                    class="form-check-input question-checkbox" 
+                                                    type="checkbox" 
+                                                    name="enabled_questions" 
+                                                    value="{{ loop.index0 }}"
+                                                    id="question_{{ loop.index0 }}"
+                                                    {% if question.get('enabled', True) %}checked{% endif %}
+                                                >
+                                                <label class="form-check-label font-weight-bold" for="question_{{ loop.index0 }}">
+                                                    <span class="badge badge-primary mr-2">
+                                                        {% if question.get('number') %}
+                                                            {{ question.number }}
+                                                        {% else %}
+                                                            {{ loop.index }}
+                                                        {% endif %}
+                                                    </span>
+                                                    Aktivní otázka
+                                                </label>
+                                            </div>
+                                            
+                                            <div class="question-content">
+                                                <h6 class="text-primary mb-2">
+                                                    <i class="fas fa-question"></i> Otázka:
+                                                </h6>
+                                                <p class="mb-2">{{ question.question }}</p>
+                                                
+                                                <h6 class="text-success mb-2">
+                                                    <i class="fas fa-check"></i> Správná odpověď:
+                                                </h6>
+                                                <p class="mb-2 text-success">{{ question.correct_answer }}</p>
+                                                
+                                                {% if question.keywords %}
+                                                <h6 class="text-info mb-2">
+                                                    <i class="fas fa-tags"></i> Klíčová slova:
+                                                </h6>
+                                                <div class="mb-2">
+                                                    {% for keyword in question.keywords %}
+                                                        <span class="badge badge-info mr-1">{{ keyword }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Tato lekce nemá žádné otázky.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mt-4 text-center">
+                    <button type="submit" class="btn btn-success btn-lg">
+                        <i class="fas fa-save"></i> Uložit změny
+                    </button>
+                    <a href="{{ request.url_for('admin_list_lessons') }}" class="btn btn-secondary btn-lg ml-2">
+                        <i class="fas fa-times"></i> Zrušit
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function selectAll(checked) {
+    const checkboxes = document.querySelectorAll('.question-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = checked;
+    });
+}
+
+// Zvýrazní kartu otázky podle stavu checkboxu
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.question-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        updateQuestionCard(checkbox);
+        
+        checkbox.addEventListener('change', function() {
+            updateQuestionCard(this);
+        });
+    });
+});
+
+function updateQuestionCard(checkbox) {
+    const card = checkbox.closest('.question-card');
+    if (checkbox.checked) {
+        card.classList.add('border-success');
+        card.classList.remove('border-secondary');
+    } else {
+        card.classList.add('border-secondary');
+        card.classList.remove('border-success');
+    }
+}
+</script>
+
+<style>
+.question-card {
+    transition: all 0.3s ease;
+    border: 2px solid #dee2e6;
+}
+
+.question-card.border-success {
+    border-color: #28a745 !important;
+    background-color: #f8fff9;
+}
+
+.question-card.border-secondary {
+    border-color: #6c757d !important;
+    background-color: #f8f9fa;
+}
+
+.question-content {
+    font-size: 0.9rem;
+}
+
+.badge-primary {
+    font-size: 0.8rem;
+}
+</style>
+{% endblock %} 

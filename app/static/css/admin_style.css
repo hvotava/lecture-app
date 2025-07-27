@@ -1,0 +1,68 @@
+/* Základní barevné schéma */
+:root {
+    --primary-color: #0d6efd; /* Modrá */
+    --secondary-color: #6c757d; /* Šedá */
+    --background-color: #f8f9fa;
+    --sidebar-bg: #343a40;
+    --sidebar-text: #adb5bd;
+    --sidebar-active: #0d6efd;
+    --card-bg: #ffffff;
+    --text-color: #212529;
+}
+
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+.admin-wrapper {
+    display: flex;
+}
+
+#sidebar-wrapper {
+    min-height: 100vh;
+    background-color: var(--sidebar-bg);
+    color: var(--sidebar-text);
+}
+
+#sidebar-wrapper .sidebar-heading {
+    padding: 0.875rem 1.25rem;
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #fff;
+}
+
+#sidebar-wrapper .list-group-item {
+    background-color: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    border: none;
+}
+
+#sidebar-wrapper .list-group-item.active {
+    background-color: var(--sidebar-active);
+    color: #fff;
+}
+
+#page-content-wrapper {
+    width: 100%;
+}
+
+.card {
+    border: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.table-responsive {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+@media (min-width: 768px) {
+    #sidebar-wrapper {
+        margin-left: 0;
+    }
+    #page-content-wrapper {
+        min-width: 0;
+        width: 100%;
+    }
+} 

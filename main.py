@@ -30,6 +30,8 @@ import time
 import tempfile
 from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean, Float, ForeignKey
 from sqlalchemy.orm import relationship
+from fastapi.staticfiles import StaticFiles
+from admin_dashboard import DashboardStats
 
 load_dotenv()
 
@@ -54,6 +56,9 @@ except Exception as e:
     print(f"❌ Config check failed: {e}")
 
 app = FastAPI(title="Lecture App", version="1.0.0")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Startup event handler pro diagnostiku - musí být rychlý pro health check
 @app.on_event("startup")
@@ -121,129 +126,43 @@ admin_router = APIRouter(prefix="/admin", tags=["admin"])
 
 @admin_router.get("/", response_class=HTMLResponse)
 def admin_root(request: Request):
-    # Přesměrování na seznam uživatelů (jako ve Flasku)
-    return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
+    # Přesměrování na dashboard
+    return RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_302_FOUND)
+
+@admin_router.get("/dashboard", response_class=HTMLResponse, name="admin_dashboard")
+def admin_dashboard(request: Request):
+    stats_generator = DashboardStats()
+    overview_stats = stats_generator.get_overview_stats()
+    return templates.TemplateResponse("admin/dashboard.html", {
+        "request": request,
+        "stats": overview_stats
+    })
 
 @admin_router.get("/users", response_class=HTMLResponse, name="admin_list_users")
 def admin_list_users(request: Request):
     session = SessionLocal()
     try:
-        # FORCE migrace při každém načtení
-        logger.info("🔧 Spouštím force migrace...")
-        
-        # 1. Přidej current_lesson_level do users
-        try:
-            session.execute(text("ALTER TABLE users ADD COLUMN current_lesson_level INTEGER DEFAULT 0"))
-            session.commit()
-            logger.info("✅ current_lesson_level přidán")
-        except Exception as e:
-            if "already exists" in str(e) or "duplicate column" in str(e):
-                logger.info("✅ current_lesson_level již existuje")
-            else:
-                logger.warning(f"Chyba při přidávání current_lesson_level: {e}")
-            session.rollback()
-        
-        # 2. Přidej lesson sloupce
-        try:
-            session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_number INTEGER DEFAULT 0"))
-            session.execute(text("ALTER TABLE lessons ADD COLUMN required_score FLOAT DEFAULT 90.0"))
-            session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_type VARCHAR(20) DEFAULT 'standard'"))
-            session.execute(text("ALTER TABLE lessons ADD COLUMN description TEXT"))
-            session.commit()
-            logger.info("✅ lesson sloupce přidány")
-        except Exception as e:
-            if "already exists" in str(e) or "duplicate column" in str(e):
-                logger.info("✅ lesson sloupce již existují")
-            else:
-                logger.warning(f"Chyba při přidávání lesson sloupců: {e}")
-            session.rollback()
-        
-        # 3. Vytvoř user_progress tabulku
-        try:
-            create_progress_table = """
-            CREATE TABLE IF NOT EXISTS user_progress (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id),
-                lesson_number INTEGER NOT NULL,
-                is_completed BOOLEAN DEFAULT FALSE,
-                best_score FLOAT,
-                attempts_count INTEGER DEFAULT 0,
-                first_completed_at TIMESTAMP,
-                last_attempt_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-            session.execute(text(create_progress_table))
-            session.commit()
-            logger.info("✅ user_progress tabulka vytvořena")
-        except Exception as e:
-            logger.warning(f"Chyba při vytváření user_progress: {e}")
-            session.rollback()
-        
-        # 4. Vytvoř test_sessions tabulku
-        try:
-            create_sessions_table = """
-            CREATE TABLE IF NOT EXISTS test_sessions (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) NOT NULL,
-                lesson_id INTEGER REFERENCES lessons(id) NOT NULL,
-                attempt_id INTEGER REFERENCES attempts(id),
-                current_question_index INTEGER NOT NULL DEFAULT 0,
-                total_questions INTEGER NOT NULL DEFAULT 0,
-                questions_data JSON NOT NULL,
-                answers JSON NOT NULL DEFAULT '[]',
-                scores JSON NOT NULL DEFAULT '[]',
-                current_score FLOAT NOT NULL DEFAULT 0.0,
-                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                completed_at TIMESTAMP,
-                is_completed BOOLEAN NOT NULL DEFAULT FALSE
-            )
-            """
-            session.execute(text(create_sessions_table))
-            session.commit()
-            logger.info("✅ test_sessions tabulka vytvořena")
-        except Exception as e:
-            logger.warning(f"Chyba při vytváření test_sessions: {e}")
-            session.rollback()
-        
-        # Bezpečné načtení uživatelů s fallback
-        try:
-            users = session.query(User).all()
-        except Exception as query_error:
-            logger.error(f"Chyba při načítání uživatelů: {query_error}")
-            # Fallback - načti bez current_lesson_level
-            users_raw = session.execute(text("SELECT id, name, phone, language, detail FROM users")).fetchall()
-            users = []
-            for row in users_raw:
-                user = type('User', (), {
-                    'id': row[0],
-                    'name': row[1], 
-                    'phone': row[2],
-                    'language': row[3],
-                    'detail': row[4],
-                    'current_lesson_level': 0  # Default hodnota
-                })()
-                users.append(user)
+        users = session.query(User).all()
         
         # Zajisti, že všichni uživatelé mají current_lesson_level
         for user in users:
             if not hasattr(user, 'current_lesson_level') or user.current_lesson_level is None:
                 user.current_lesson_level = 0
         
-        return templates.TemplateResponse("users/list.html", {"request": request, "users": users})
+        return templates.TemplateResponse("admin/users_list.html", {"request": request, "users": users})
     except Exception as e:
         logger.error(f"❌ Kritická chyba v admin_list_users: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        session.rollback() # Důležitý rollback
+        
         # Fallback - prázdný seznam
-        return templates.TemplateResponse("users/list.html", {"request": request, "users": []})
+        return templates.TemplateResponse("admin/users_list.html", {"request": request, "users": [], "error": str(e)})
     finally:
         session.close()
 
 @admin_router.get("/users/new", response_class=HTMLResponse, name="admin_new_user_get")
 def admin_new_user_get(request: Request):
     # Prázdný formulář pro nového uživatele
-    return templates.TemplateResponse("users/form.html", {"request": request, "user": None, "form": {"name": "", "phone": "", "language": "cs", "detail": "", "name.errors": [], "phone.errors": [], "language.errors": [], "detail.errors": []}})
+    return templates.TemplateResponse("admin/user_form.html", {"request": request, "user": None, "form": {"name": "", "phone": "", "language": "cs", "detail": "", "name.errors": [], "phone.errors": [], "language.errors": [], "detail.errors": []}})
 
 @admin_router.post("/users/new", response_class=HTMLResponse)
 def admin_new_user_post(request: Request, name: str = Form(...), phone: str = Form(...), language: str = Form(...), detail: str = Form("")):
@@ -255,7 +174,7 @@ def admin_new_user_post(request: Request, name: str = Form(...), phone: str = Fo
     if language not in ["cs", "en"]:
         errors["language"].append("Neplatný jazyk.")
     if any(errors.values()):
-        return templates.TemplateResponse("users/form.html", {"request": request, "user": None, "form": {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": errors["name"], "phone.errors": errors["phone"], "language.errors": errors["language"], "detail.errors": errors["detail"]}})
+        return templates.TemplateResponse("admin/user_form.html", {"request": request, "user": None, "form": {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": errors["name"], "phone.errors": errors["phone"], "language.errors": errors["language"], "detail.errors": errors["detail"]}})
     user = User(name=name, phone=phone, language=language, detail=detail)
     # Dočasně bez current_lesson_level
     session = SessionLocal()
@@ -266,7 +185,7 @@ def admin_new_user_post(request: Request, name: str = Form(...), phone: str = Fo
         session.rollback()
         form = {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": [str(e)], "phone.errors": [], "language.errors": [], "detail.errors": []}
         session.close()
-        return templates.TemplateResponse("users/form.html", {"request": request, "user": None, "form": form})
+        return templates.TemplateResponse("admin/user_form.html", {"request": request, "user": None, "form": form})
     session.close()
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
@@ -279,7 +198,7 @@ def admin_edit_user_get(request: Request, id: int = Path(...)):
         return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
     form = {"name": user.name, "phone": user.phone, "language": user.language, "detail": user.detail, "name.errors": [], "phone.errors": [], "language.errors": [], "detail.errors": []}
     session.close()
-    return templates.TemplateResponse("users/form.html", {"request": request, "user": user, "form": form})
+    return templates.TemplateResponse("admin/user_form.html", {"request": request, "user": user, "form": form})
 
 @admin_router.post("/users/{id}/edit", response_class=HTMLResponse)
 def admin_edit_user_post(request: Request, id: int = Path(...), name: str = Form(...), phone: str = Form(...), language: str = Form(...), detail: str = Form("")):
@@ -298,7 +217,7 @@ def admin_edit_user_post(request: Request, id: int = Path(...), name: str = Form
     if any(errors.values()):
         form = {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": errors["name"], "phone.errors": errors["phone"], "language.errors": errors["language"], "detail.errors": errors["detail"]}
         session.close()
-        return templates.TemplateResponse("users/form.html", {"request": request, "user": user, "form": form})
+        return templates.TemplateResponse("admin/user_form.html", {"request": request, "user": user, "form": form})
     user.name = name
     user.phone = phone
     user.language = language
@@ -309,7 +228,7 @@ def admin_edit_user_post(request: Request, id: int = Path(...), name: str = Form
         session.rollback()
         form = {"name": name, "phone": phone, "language": language, "detail": detail, "name.errors": [str(e)], "phone.errors": [], "language.errors": [], "detail.errors": []}
         session.close()
-        return templates.TemplateResponse("users/form.html", {"request": request, "user": user, "form": form})
+        return templates.TemplateResponse("admin/user_form.html", {"request": request, "user": user, "form": form})
     session.close()
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
@@ -759,105 +678,35 @@ def admin_create_lesson_0(request: Request):
 def admin_list_lessons(request: Request):
     session = SessionLocal()
     try:
-        # KRITICKÁ MIGRACE - musí proběhnout PŘED načítáním dat
-        logger.info("🔧 Spouštím kritickou migraci pro lessons...")
+        lessons = session.query(Lesson).order_by(Lesson.id.desc()).all()
         
-        # 1. Přidej description sloupec
-        try:
-            session.execute(text("ALTER TABLE lessons ADD COLUMN description TEXT"))
-            session.commit()
-            logger.info("✅ Description sloupec přidán")
-        except Exception as e:
-            if "already exists" in str(e) or "duplicate column" in str(e):
-                logger.info("✅ Description sloupec již existuje")
-            else:
-                logger.warning(f"Chyba při přidávání description: {e}")
-            session.rollback()
+        # Ošetření chybějících sloupců pro každou lekci v Pythonu, pokud by chyběly
+        for lesson in lessons:
+            if not hasattr(lesson, 'lesson_number'):
+                lesson.lesson_number = 0
+            if not hasattr(lesson, 'lesson_type'):
+                lesson.lesson_type = 'standard'
+            if not hasattr(lesson, 'required_score'):
+                lesson.required_score = 90.0
+            if not hasattr(lesson, 'description'):
+                lesson.description = ''
+                
+        logger.info(f"✅ Načteno {len(lessons)} lekcí.")
         
-        # 2. Přidej další potřebné sloupce pro budoucí použití
-        try:
-            session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_number INTEGER DEFAULT 0"))
-            session.execute(text("ALTER TABLE lessons ADD COLUMN required_score FLOAT DEFAULT 90.0"))
-            session.execute(text("ALTER TABLE lessons ADD COLUMN lesson_type VARCHAR(20) DEFAULT 'standard'"))
-            session.commit()
-            logger.info("✅ Další lesson sloupce přidány")
-        except Exception as e:
-            if "already exists" in str(e) or "duplicate column" in str(e):
-                logger.info("✅ Další lesson sloupce již existují")
-            else:
-                logger.warning(f"Chyba při přidávání dalších sloupců: {e}")
-            session.rollback()
-        
-        # 3. Bezpečné načtení dat s fallback pro chybějící sloupce
-        try:
-            lessons = session.query(Lesson).order_by(Lesson.id.desc()).all()
-            
-            # Ošetření chybějících sloupců pro každou lekci
-            for lesson in lessons:
-                if not hasattr(lesson, 'lesson_number') or lesson.lesson_number is None:
-                    lesson.lesson_number = 0
-                if not hasattr(lesson, 'lesson_type') or lesson.lesson_type is None:
-                    lesson.lesson_type = 'standard'
-                if not hasattr(lesson, 'required_score') or lesson.required_score is None:
-                    lesson.required_score = 90.0
-                if not hasattr(lesson, 'description') or lesson.description is None:
-                    lesson.description = ''
-                    
-            logger.info(f"✅ Načteno {len(lessons)} lekcí s ošetřenými sloupci")
-            
-        except Exception as query_error:
-            logger.error(f"❌ Chyba při načítání lekcí: {query_error}")
-            # Fallback - použij raw SQL
-            lessons_raw = session.execute(text("""
-                SELECT id, title, language, script, questions, level, created_at,
-                       COALESCE(lesson_number, 0) as lesson_number,
-                       COALESCE(lesson_type, 'standard') as lesson_type,
-                       COALESCE(required_score, 90.0) as required_score,
-                       COALESCE(description, '') as description
-                FROM lessons ORDER BY id DESC
-            """)).fetchall()
-            
-            lessons = []
-            for row in lessons_raw:
-                lesson = type('Lesson', (), {
-                    'id': row[0],
-                    'title': row[1],
-                    'language': row[2],
-                    'script': row[3],
-                    'questions': row[4],
-                    'level': row[5],
-                    'created_at': row[6],
-                    'lesson_number': row[7],
-                    'lesson_type': row[8],
-                    'required_score': row[9],
-                    'description': row[10]
-                })()
-                lessons.append(lesson)
-            
-            logger.info(f"✅ Načteno {len(lessons)} lekcí pomocí fallback SQL")
-        
-        session.close()
-        return templates.TemplateResponse("lessons/list.html", {"request": request, "lessons": lessons})
+        return templates.TemplateResponse("admin/lessons_list.html", {"request": request, "lessons": lessons})
         
     except Exception as e:
-        session.close()
         logger.error(f"❌ KRITICKÁ CHYBA při načítání lekcí: {e}")
-        logger.error(f"❌ Traceback: {str(e)}")
-        
-        # Zkus vytvořit tabulku znovu
-        try:
-            from app.database import Base, engine
-            Base.metadata.create_all(engine)
-            logger.info("✅ Tabulky znovu vytvořeny")
-        except Exception as create_error:
-            logger.error(f"❌ Chyba při vytváření tabulek: {create_error}")
+        session.rollback()  # Důležitý rollback pro vyčištění session
         
         return templates.TemplateResponse("message.html", {
             "request": request,
             "message": f"❌ Databázová chyba při načítání lekcí.\n\nChyba: {str(e)}\n\nZkuste obnovit stránku za chvíli.",
-            "back_url": "/admin/users",
-            "back_text": "Zpět na uživatele"
+            "back_url": "/admin/dashboard",
+            "back_text": "Zpět na dashboard"
         })
+    finally:
+        session.close()
 
 @admin_router.get("/lessons/new", response_class=HTMLResponse, name="admin_new_lesson_get")
 def admin_new_lesson_get(request: Request):

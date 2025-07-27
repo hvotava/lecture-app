@@ -1,0 +1,70 @@
+{% extends "admin/base.html" %}
+
+{% block title %}
+    Přehled Dashboard
+{% endblock %}
+
+{% block page_title %}
+    Hlavní přehled
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-people-fill me-2"></i>Počet uživatelů</h5>
+                <p class="card-text fs-4">{{ stats.total_users|default('--') }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-check-circle-fill me-2"></i>Dokončené testy</h5>
+                <p class="card-text fs-4">{{ stats.total_tests|default('--') }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-graph-up me-2"></i>Průměrné skóre</h5>
+                <p class="card-text fs-4">{{ stats.avg_score_30d|default('--') }} %</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-patch-check-fill me-2"></i>Udělené odznaky</h5>
+                <p class="card-text fs-4">{{ stats.total_badges_awarded|default('--') }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Aktivita v čase</h5>
+                <canvas id="activityChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Výkon podle kategorií</h5>
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Zde bude logika pro načtení dat a vykreslení grafů
+</script>
+{% endblock %} 

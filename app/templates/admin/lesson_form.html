@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1 class="mb-4">{% if lesson %}Upravit{% else %}Nová{% endif %} lekce</h1>
+            <form method="post">
+                <!-- CSRF token není potřeba ve FastAPI -->
+                <div class="mb-3">
+                    <label for="title" class="form-label">Název</label>
+                    <input type="text" class="form-control" id="title" name="title" value="{{ form.title }}">
+                    {% for error in form['title.errors'] %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="lesson_number" class="form-label">Číslo lekce</label>
+                        <input type="number" class="form-control" id="lesson_number" name="lesson_number" 
+                               value="{{ form.lesson_number or 0 }}" min="0" max="100">
+                        <small class="form-text text-muted">0 = vstupní test, 1+ = běžné lekce</small>
+                        {% for error in form['lesson_number.errors'] %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="lesson_type" class="form-label">Typ lekce</label>
+                        <select class="form-select" id="lesson_type" name="lesson_type">
+                            <option value="entry_test" {% if form.lesson_type == 'entry_test' %}selected{% endif %}>Vstupní test</option>
+                            <option value="standard" {% if form.lesson_type == 'standard' %}selected{% endif %}>Standardní</option>
+                            <option value="advanced" {% if form.lesson_type == 'advanced' %}selected{% endif %}>Pokročilá</option>
+                        </select>
+                        {% for error in form['lesson_type.errors'] %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="language" class="form-label">Jazyk</label>
+                        <select class="form-select" id="language" name="language">
+                            <option value="cs" {% if form.language == 'cs' %}selected{% endif %}>Čeština</option>
+                            <option value="en" {% if form.language == 'en' %}selected{% endif %}>Angličtina</option>
+                        </select>
+                        {% for error in form['language.errors'] %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Popis lekce</label>
+                    <textarea class="form-control" id="description" name="description" rows="3" placeholder="Krátký popis lekce pro studenty...">{{ form.description }}</textarea>
+                    {% for error in form['description.errors'] %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                </div>
+                <div class="mb-3">
+                    <label for="required_score" class="form-label">Požadované skóre pro úspěch (%)</label>
+                    <input type="number" class="form-control" id="required_score" name="required_score" 
+                           value="{{ form.required_score or 90 }}" min="0" max="100" step="0.1">
+                    <small class="form-text text-muted">Minimální skóre pro postup do další lekce</small>
+                    {% for error in form['required_score.errors'] %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                </div>
+                <div class="mb-3">
+                    <label for="script" class="form-label">Skript lekce</label>
+                    <textarea class="form-control" id="script" name="script" rows="10" placeholder="Obsah lekce...">{{ form.script }}</textarea>
+                    {% for error in form['script.errors'] %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                </div>
+                <div class="mb-3">
+                    <label for="questions" class="form-label">Otázky (JSON)</label>
+                    <div class="input-group">
+                        <textarea class="form-control" id="questions" name="questions" rows="5">{{ form.questions }}</textarea>
+                        <button type="button" class="btn btn-outline-primary" onclick="generateQuestions()">
+                            Vygenerovat otázky pomocí AI
+                        </button>
+                    </div>
+                    <div class="form-text">
+                        Zadejte JSON ve formátu: {"current": "Otázka?", "answer": "Správná odpověď"}
+                    </div>
+                    {% for error in form['questions.errors'] %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                </div>
+                <div class="d-flex justify-content-between">
+                    <a href="{{ request.url_for('admin_list_lessons') }}" class="btn btn-outline-secondary">Zpět</a>
+                    <button type="submit" class="btn btn-primary">Uložit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+async function generateQuestions() {
+    const script = document.getElementById('script').value;
+    const language = document.getElementById('language').value;
+    if (!script) {
+        alert('Nejprve zadejte text skriptu');
+        return;
+    }
+    try {
+        const response = await fetch('/admin/lessons/generate-questions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ script, language })
+        });
+        const data = await response.json();
+        if (data.error) {
+            alert(data.error);
+            return;
+        }
+        // Vyber první otázku jako aktuální
+        const questions = data.questions;
+        document.getElementById('questions').value = JSON.stringify(questions, null, 2);
+    } catch (error) {
+        alert('Chyba při generování otázek: ' + error);
+    }
+}
+</script>
+{% endblock %} 
