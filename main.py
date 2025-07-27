@@ -235,7 +235,7 @@ def admin_edit_user_post(request: Request, id: int = Path(...), name: str = Form
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
 @admin_router.post("/users/{user_id}/delete", name="admin_delete_user")
-def admin_delete_user(request: Request, user_id: int = Path(...)):
+def admin_delete_user(request: Request, user_id: int = Path(...), force: bool = Query(False)):
     session = SessionLocal()
     try:
         user = session.query(User).get(user_id)
@@ -252,14 +252,32 @@ def admin_delete_user(request: Request, user_id: int = Path(...)):
         test_sessions_count = session.query(TestSession).filter(TestSession.user_id == user_id).count()
         attempts_count = session.query(Attempt).filter(Attempt.user_id == user_id).count()
         
-        if test_sessions_count > 0 or attempts_count > 0:
+        if (test_sessions_count > 0 or attempts_count > 0) and not force:
             logger.warning(f"❌ Nelze smazat uživatele {user.name} (ID: {user_id}) - má {test_sessions_count} test sessions a {attempts_count} pokusů")
+            
+            # Nabídni možnost vynutit smazání
+            force_delete_url = f"/admin/users/{user_id}/delete?force=true"
             return templates.TemplateResponse("message.html", {
                 "request": request,
-                "message": f"❌ Nelze smazat uživatele '{user.name}'.\n\nUživatel má {test_sessions_count} aktivních testů a {attempts_count} pokusů.\nPro smazání nejprve odstraňte související záznamy.",
+                "message": f"❌ Uživatel '{user.name}' má související záznamy:\n\n• {test_sessions_count} aktivních testů\n• {attempts_count} pokusů\n\nChcete pokračovat a smazat uživatele i se všemi souvisejícími záznamy?",
                 "back_url": "/admin/users",
-                "back_text": "Zpět na uživatele"
+                "back_text": "Zrušit",
+                "action_url": force_delete_url,
+                "action_text": "Vynutit smazání",
+                "action_class": "btn-danger"
             })
+        
+        # Pokud force=true, smaž všechny související záznamy
+        if force and (test_sessions_count > 0 or attempts_count > 0):
+            logger.info(f"🔥 VYNUTIT SMAZÁNÍ: Mazání {test_sessions_count} test sessions a {attempts_count} pokusů pro uživatele {user.name}")
+            
+            # Smaž všechny test sessions
+            session.query(TestSession).filter(TestSession.user_id == user_id).delete()
+            
+            # Smaž všechny attempts (a jejich answers se smažou automaticky díky cascade)
+            session.query(Attempt).filter(Attempt.user_id == user_id).delete()
+            
+            logger.info(f"✅ Všechny související záznamy pro uživatele {user.name} byly smazány")
         
         # Smazání uživatele
         user_name = user.name
