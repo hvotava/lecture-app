@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import logging
 from twilio.twiml.voice_response import VoiceResponse, Connect, Stream
-from app.models import Attempt, Lesson, User, Answer, Base
+from app.models import Attempt, Lesson, User, Answer, Base, TestSession
 from sqlalchemy.orm import mapped_column
 from fastapi import Query
 from fastapi.templating import Jinja2Templates
@@ -3643,34 +3643,6 @@ def admin_user_progress(request: Request):
             "back_text": "Zpět na uživatele"
         })
 
-class TestSession(Base):
-    """Model pro sledování průběhu testování"""
-    __tablename__ = "test_sessions" 
-    
-    id = mapped_column(Integer, primary_key=True)
-    user_id = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    lesson_id = mapped_column(Integer, ForeignKey("lessons.id"), nullable=False)
-    attempt_id = mapped_column(Integer, ForeignKey("attempts.id"), nullable=True)
-    
-    # Stav testování
-    current_question_index = mapped_column(Integer, nullable=False, default=0)
-    total_questions = mapped_column(Integer, nullable=False, default=0)
-    questions_data = mapped_column(JSON, nullable=False)  # Seznam otázek pro tento test
-    
-    # Výsledky
-    answers = mapped_column(JSON, nullable=False, default=list)  # Seznam odpovědí
-    scores = mapped_column(JSON, nullable=False, default=list)   # Seznam skóre
-    current_score = mapped_column(Float, nullable=False, default=0.0)
-    
-    # Metadata
-    started_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    completed_at = mapped_column(DateTime, nullable=True)
-    is_completed = mapped_column(Boolean, nullable=False, default=False)
-    
-    # Relationships
-    user = relationship("User")
-    lesson = relationship("Lesson")
-    attempt = relationship("Attempt")
 
 # Funkce pro správu test sessions
 def get_or_create_test_session(user_id: int, lesson_id: int, attempt_id: int = None) -> TestSession:
