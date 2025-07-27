@@ -717,7 +717,7 @@ def admin_new_lesson_get(request: Request):
         "title.errors": [], "language.errors": [], "script.errors": [], "questions.errors": [],
         "description.errors": [], "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
     }
-    return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
+    return templates.TemplateResponse("admin/lesson_form.html", {"request": request, "lesson": None, "form": form})
 
 @admin_router.post("/lessons/new", response_class=HTMLResponse)
 async def admin_new_lesson_post(request: Request):
@@ -774,7 +774,7 @@ async def admin_new_lesson_post(request: Request):
                 "description.errors": errors["description"], "lesson_number.errors": errors["lesson_number"],
                 "lesson_type.errors": errors["lesson_type"], "required_score.errors": errors["required_score"]
             }
-            return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
+            return templates.TemplateResponse("admin/lesson_form.html", {"request": request, "lesson": None, "form": form})
     
         # Vytvoření lekce
         lesson = Lesson(
@@ -803,7 +803,7 @@ async def admin_new_lesson_post(request: Request):
                 "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
             }
             session.close()
-            return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
+            return templates.TemplateResponse("admin/lesson_form.html", {"request": request, "lesson": None, "form": form})
         session.close()
         return RedirectResponse(url="/admin/lessons", status_code=status.HTTP_302_FOUND)
         
@@ -815,7 +815,7 @@ async def admin_new_lesson_post(request: Request):
             "title.errors": [f"Chyba: {str(e)}"], "language.errors": [], "script.errors": [], "questions.errors": [],
             "description.errors": [], "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
         }
-        return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
+        return templates.TemplateResponse("admin/lesson_form.html", {"request": request, "lesson": None, "form": form})
 
 @admin_router.get("/lessons/{id}/edit", response_class=HTMLResponse, name="admin_edit_lesson_get")
 def admin_edit_lesson_get(request: Request, id: int = Path(...)):
@@ -828,7 +828,7 @@ def admin_edit_lesson_get(request: Request, id: int = Path(...)):
     # Pro Lekci 0 a nové lekce s otázkami použij novou template
     if lesson.title.startswith("Lekce 0") or (lesson.questions and isinstance(lesson.questions, list) and len(lesson.questions) > 0 and isinstance(lesson.questions[0], dict)):
         session.close()
-        return templates.TemplateResponse("lessons/edit.html", {"request": request, "lesson": lesson})
+        return templates.TemplateResponse("admin/lesson_edit.html", {"request": request, "lesson": lesson})
     
     # Pro staré lekce použij původní template s novými poli
     form = {
@@ -844,7 +844,7 @@ def admin_edit_lesson_get(request: Request, id: int = Path(...)):
         "description.errors": [], "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
     }
     session.close()
-    return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
+    return templates.TemplateResponse("admin/lesson_form.html", {"request": request, "lesson": lesson, "form": form})
 
 @admin_router.post("/lessons/{id}/edit", response_class=HTMLResponse)
 async def admin_edit_lesson_post(request: Request, id: int = Path(...)):
@@ -868,7 +868,7 @@ async def admin_edit_lesson_post(request: Request, id: int = Path(...)):
             
             if not title:
                 session.close()
-                return templates.TemplateResponse("lessons/edit.html", {
+                return templates.TemplateResponse("admin/lesson_edit.html", {
                     "request": request, 
                     "lesson": lesson, 
                     "error": "Název je povinný."
@@ -953,7 +953,7 @@ async def admin_edit_lesson_post(request: Request, id: int = Path(...)):
                 "lesson_type.errors": errors["lesson_type"], "required_score.errors": errors["required_score"]
             }
             session.close()
-            return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": lesson, "form": form})
+            return templates.TemplateResponse("admin/lesson_form.html", {"request": request, "lesson": lesson, "form": form})
         
         # Aktualizace lekce
         lesson.title = title
@@ -972,7 +972,7 @@ async def admin_edit_lesson_post(request: Request, id: int = Path(...)):
         session.rollback()
         logger.error(f"❌ Chyba při editaci lekce {id}: {e}")
         session.close()
-        return templates.TemplateResponse("lessons/edit.html", {
+        return templates.TemplateResponse("admin/lesson_edit.html", {
             "request": request, 
             "lesson": lesson, 
             "error": f"Chyba při ukládání: {str(e)}"
@@ -2384,16 +2384,25 @@ Formát odpovědi: [FEEDBACK] [SKÓRE: XX%]"""
                 response.say(final_message_with_pauses, language="cs-CZ", rate="0.8")
                 return False  # Ukončit konverzaci
             else:
-                # Další otázka
-                next_question = get_current_question(updated_session)
+                # Další otázka - použij adaptivní výběr
+                next_question = get_next_adaptive_question(updated_session)
                 if next_question:
-                    next_text = f"{clean_feedback} Další otázka: {next_question.get('question', '')}"
+                    # Aktualizace indexu v databázi
+                    test_session = session.query(TestSession).get(updated_session['id'])
+                    test_session.current_question_index = next_question['original_index']
+                    session.commit()
+                    
+                    difficulty_indicator = {"easy": "⭐", "medium": "⭐⭐", "hard": "⭐⭐⭐"}.get(
+                        next_question.get('difficulty', 'medium'), "⭐⭐"
+                    )
+                    
+                    next_text = f"{clean_feedback} Další otázka {difficulty_indicator}: {next_question.get('question', '')}"
                     # Použij přirozenější pauzy
                     next_text_with_pauses = create_natural_speech_response(next_text)
                     response.say(next_text_with_pauses, language="cs-CZ", rate="0.8")
                     return True  # Pokračovat
                 else:
-                    response.say("Chyba při načítání další otázky.", language="cs-CZ", rate="0.8")
+                    response.say("Všechny otázky zodpovězeny. Test končí.", language="cs-CZ", rate="0.8")
                     return False
                     
         except Exception as e:
@@ -3904,4 +3913,4 @@ def admin_new_lesson_get(request: Request):
         "title.errors": [], "language.errors": [], "script.errors": [], "questions.errors": [],
         "description.errors": [], "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
     }
-    return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
+    return templates.TemplateResponse("admin/lesson_form.html", {"request": request, "lesson": None, "form": form})
