@@ -123,6 +123,7 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # Admin router
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
+system_router = APIRouter(prefix="/admin/system", tags=["system"]) # Nový router
 
 @admin_router.get("/", response_class=HTMLResponse)
 def admin_root(request: Request):
@@ -1606,8 +1607,72 @@ async def admin_lesson_0_questions_post(request: Request):
 
 # Připojení admin routeru
 app.include_router(admin_router)
+app.include_router(system_router) # Připojení nového routeru
 
 logger = logging.getLogger("uvicorn")
+
+# PŘÍMÝ ENDPOINT NA HLAVNÍ APP - GARANTOVANĚ DOSTUPNÝ
+@app.get("/admin/system/run-migrations", response_class=HTMLResponse)
+def direct_run_migrations(request: Request):
+    """
+    PŘÍMÝ endpoint pro databázové migrace - registrovaný přímo na hlavní app.
+    """
+    session = SessionLocal()
+    results = {"success": [], "errors": []}
+    
+    # Kompletní seznam migrací
+    migrations = {
+        "lessons": [
+            ("base_difficulty", "VARCHAR(20)", "medium"),
+        ],
+        "test_sessions": [
+            ("difficulty_score", "FLOAT", 50.0),
+            ("failed_categories", "JSON", "[]"),
+        ]
+    }
+    
+    try:
+        for table, columns in migrations.items():
+            for column_name, column_type, default_value in columns:
+                # Pro default hodnoty stringového typu potřebujeme uvozovky
+                default_sql = f"'{default_value}'" if isinstance(default_value, str) else default_value
+                
+                try:
+                    # Zkusit přidat sloupec
+                    session.execute(text(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type} DEFAULT {default_sql}"))
+                    session.commit()
+                    results["success"].append(f"✅ Sloupec '{column_name}' úspěšně přidán do tabulky '{table}'.")
+                except Exception as e:
+                    # Pokud sloupec již existuje, ignorovat chybu
+                    if "already exists" in str(e) or "duplicate column" in str(e):
+                        results["success"].append(f"☑️ Sloupec '{column_name}' v tabulce '{table}' již existuje.")
+                    else:
+                        results["errors"].append(f"❌ Chyba při přidávání sloupce '{column_name}': {e}")
+                    session.rollback() # Důležitý rollback po každé chybě
+                    
+        if not results["errors"]:
+            message = "🎉 Všechny migrace proběhly úspěšně! Databáze je nyní synchronizována."
+        else:
+            message = "⚠️ Některé migrace selhaly. Zkontrolujte detaily níže."
+            
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": message,
+            "details": results,
+            "back_url": "/admin/dashboard",
+            "back_text": "Zpět na dashboard"
+        })
+
+    except Exception as e:
+        session.rollback()
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"❌ Kritická chyba při migraci: {e}",
+            "back_url": "/admin/dashboard",
+            "back_text": "Zpět na dashboard"
+        })
+    finally:
+        session.close()
 
 @app.get("/")
 async def root():
@@ -3767,7 +3832,7 @@ def is_completion_signal(speech_text: str) -> bool:
     return any(signal in speech_lower for signal in completion_signals)
 
 # --- NOVÉ SYSTÉMOVÉ ENDPOINTY ---
-@admin_router.get("/system/run-migrations", response_class=HTMLResponse, name="admin_run_migrations")
+@system_router.get("/run-migrations", response_class=HTMLResponse, name="admin_run_migrations")
 def admin_run_migrations(request: Request):
     """
     Bezpečný endpoint pro jednorázové spuštění databázových migrací.
