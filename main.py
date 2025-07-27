@@ -28,7 +28,7 @@ import wave
 import asyncio
 import time
 import tempfile
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean, Float, ForeignKey, text
 from sqlalchemy.orm import relationship
 from fastapi.staticfiles import StaticFiles
 from admin_dashboard import DashboardStats
