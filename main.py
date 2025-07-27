@@ -55,7 +55,7 @@ except Exception as e:
 
 app = FastAPI(title="Lecture App", version="1.0.0")
 
-# Startup event handler pro diagnostiku
+# Startup event handler pro diagnostiku - musí být rychlý pro health check
 @app.on_event("startup")
 async def startup_event():
     import sys
@@ -65,7 +65,34 @@ async def startup_event():
     print(f"DATABASE_URL: {'SET' if os.getenv('DATABASE_URL') else 'NOT SET'}")
     print(f"OPENAI_API_KEY: {'SET' if os.getenv('OPENAI_API_KEY') else 'NOT SET'}")
     print(f"TWILIO_ACCOUNT_SID: {'SET' if os.getenv('TWILIO_ACCOUNT_SID') else 'NOT SET'}")
+    
+    # Otestuj základní importy asynchronně (neblokuj startup)
+    try:
+        import asyncio
+        asyncio.create_task(test_connections_async())
+    except Exception as e:
+        print(f"⚠️  Async connection test failed: {e}")
+    
     print("=== STARTUP COMPLETE ===")
+
+async def test_connections_async():
+    """Asynchronní test připojení - nesmí blokovat startup"""
+    await asyncio.sleep(1)  # Dej čas na startup
+    try:
+        print("🔍 Testing DB connection...")
+        from app.database import SessionLocal
+        session = SessionLocal()
+        session.close()
+        print("✅ DB connection OK")
+    except Exception as e:
+        print(f"❌ DB connection failed: {e}")
+    
+    try:
+        print("🔍 Testing OpenAI...")
+        import openai
+        print("✅ OpenAI import OK")
+    except Exception as e:
+        print(f"❌ OpenAI import failed: {e}")
 
 # CORS (pro případné admin rozhraní)
 app.add_middleware(
@@ -1735,23 +1762,14 @@ logger = logging.getLogger("uvicorn")
 
 @app.get("/")
 async def root():
-    """Health check endpoint - musí vracet 200 OK pro Railway health check"""
-    try:
-        return {
-            "status": "healthy",
-            "message": "Lecture App FastAPI běží!", 
-            "endpoints": ["/health", "/voice/", "/voice/media-stream"],
-            "port": os.getenv('PORT', '8000'),
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        # I když jsou problémy, vracíme 200 pro health check
-        return {
-            "status": "partial",
-            "message": "App running with warnings",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
+    """Health check endpoint - MUSÍ být rychlý pro Railway health check"""
+    # Nejjednodušší možná odpověď - žádné importy, žádné databázové dotazy
+    return {
+        "status": "healthy",
+        "message": "Lecture App FastAPI běží!",
+        "port": os.getenv('PORT', '8000'),
+        "time": str(datetime.now())
+    }
 
 @app.post("/")
 async def root_post(request: Request, attempt_id: str = Query(None)):
