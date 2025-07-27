@@ -61,56 +61,28 @@ def detect_language_from_number(phone_number: str) -> Tuple[str, str]:
 class TwilioService:
     def __init__(self):
         try:
-            logger.info("Kontroluji Twilio přihlašovací údaje:")
+            logger.info("Inicializuji TwilioService...")
             
-            # OpenAI služba se inicializuje lazy
-            self._openai_service = None
-            
-            # Načtení proměnných z .env souboru
-            env_path = os.path.join('/home/synqflows', 'lecture', '.env')
-            logger.info(f"Hledám .env soubor na cestě: {env_path}")
-            
-            if os.path.exists(env_path):
-                logger.info("Našel jsem .env soubor, načítám proměnné")
-                load_dotenv(env_path, override=True)
-                
-                # Kontrola obsahu .env souboru (bez citlivých údajů)
-                try:
-                    with open(env_path, 'r') as f:
-                        env_content = f.read()
-                        logger.info("Obsah .env souboru (bez citlivých údajů):")
-                        for line in env_content.splitlines():
-                            if line.strip() and not line.startswith('#'):
-                                key = line.split('=')[0].strip()
-                                logger.info(f"Nalezena proměnná: {key}")
-                except Exception as e:
-                    logger.error(f"Chyba při čtení .env souboru: {str(e)}")
-                    logger.error(f"Traceback: {traceback.format_exc()}")
+            # Standardní a flexibilní načtení .env
+            # python-dotenv automaticky hledá .env v aktuálním a nadřazených adresářích
+            if load_dotenv():
+                logger.info("✅ .env soubor nalezen a načten (standardní metoda).")
             else:
-                logger.error(f".env soubor nebyl nalezen na cestě: {env_path}")
-            
-            # Kontrola načtených proměnných
+                logger.warning("⚠️ Standardní .env soubor nenalezen, zkouším alternativní cesty...")
+                # Zde může být záložní logika pro specifické produkční prostředí
+                env_path_prod = os.path.join('/home/synqflows', 'lecture', '.env')
+                if os.path.exists(env_path_prod) and load_dotenv(env_path_prod):
+                     logger.info(f"✅ .env soubor načten z produkční cesty: {env_path_prod}")
+                else:
+                     logger.error("❌ Nepodařilo se najít .env soubor ani na jedné ze známých cest.")
+
             self.account_sid = os.getenv("TWILIO_ACCOUNT_SID")
             self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
             self.phone_number = os.getenv("TWILIO_PHONE_NUMBER")
             
-            logger.info("Kontrola načtených Twilio proměnných:")
-            logger.info(f"TWILIO_ACCOUNT_SID je nastaven: {'Ano' if self.account_sid else 'Ne'}")
-            if self.account_sid:
-                logger.info(f"TWILIO_ACCOUNT_SID začíná na: {self.account_sid[:2]}...")
-                logger.info(f"TWILIO_ACCOUNT_SID délka: {len(self.account_sid)} znaků")
-            logger.info(f"TWILIO_AUTH_TOKEN je nastaven: {'Ano' if self.auth_token else 'Ne'}")
-            if self.auth_token:
-                logger.info(f"TWILIO_AUTH_TOKEN začíná na: {self.auth_token[:2]}...")
-                logger.info(f"TWILIO_AUTH_TOKEN délka: {len(self.auth_token)} znaků")
-            logger.info(f"TWILIO_PHONE_NUMBER je nastaven: {'Ano' if self.phone_number else 'Ne'}")
-            if self.phone_number:
-                logger.info(f"TWILIO_PHONE_NUMBER začíná na: {self.phone_number[:4]}...")
-                logger.info(f"TWILIO_PHONE_NUMBER délka: {len(self.phone_number)} znaků")
-            
             if not all([self.account_sid, self.auth_token, self.phone_number]):
-                logger.error("Chybí některé Twilio proměnné v .env souboru!")
-                raise ValueError("Chybí některé Twilio proměnné v .env souboru!")
+                logger.error("❌ CHYBA: Některé klíčové proměnné pro Twilio (ACCOUNT_SID, AUTH_TOKEN, PHONE_NUMBER) nebyly nalezeny v prostředí!")
+                raise ValueError("Chybí povinné Twilio proměnné.")
             
             # Kontrola formátu hodnot
             if not self.account_sid.startswith("AC"):
@@ -129,13 +101,13 @@ class TwilioService:
                 logger.error("TWILIO_PHONE_NUMBER musí začínat na '+'")
                 raise ValueError("Neplatný formát TWILIO_PHONE_NUMBER")
             
-            logger.info("Všechny Twilio přihlašovací údaje jsou nastaveny, inicializuji klienta")
+            logger.info("✅ Všechny Twilio přihlašovací údaje jsou nastaveny, inicializuji klienta.")
             self.client = Client(self.account_sid, self.auth_token)
             self.enabled = True
-            logger.info("Twilio služba byla úspěšně inicializována")
+            logger.info("✅ Twilio služba byla úspěšně inicializována.")
         except Exception as e:
             self.enabled = False
-            logger.error(f"Chyba při inicializaci Twilio služby: {str(e)}")
+            logger.error(f"❌ Kritická chyba při inicializaci Twilio služby: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             logger.error(f"Python verze: {sys.version}")
             logger.error(f"Python cesta: {sys.path}")

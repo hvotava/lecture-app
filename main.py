@@ -3776,26 +3776,34 @@ def admin_run_migrations(request: Request):
     session = SessionLocal()
     results = {"success": [], "errors": []}
     
+    # Kompletní seznam migrací pro synchronizaci DB s modely
     migrations = {
         "lessons": [
             ("base_difficulty", "VARCHAR(20)", "medium"),
+        ],
+        "test_sessions": [
+            ("difficulty_score", "FLOAT", 50.0),
+            ("failed_categories", "JSON", "[]"),
         ]
     }
     
     try:
         for table, columns in migrations.items():
             for column_name, column_type, default_value in columns:
+                # Pro default hodnoty stringového typu potřebujeme uvozovky
+                default_sql = f"'{default_value}'" if isinstance(default_value, str) else default_value
+                
                 try:
                     # Zkusit přidat sloupec
-                    session.execute(text(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type} DEFAULT '{default_value}'"))
+                    session.execute(text(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type} DEFAULT {default_sql}"))
                     session.commit()
-                    results["success"].append(f"Sloupec '{column_name}' úspěšně přidán do tabulky '{table}'.")
+                    results["success"].append(f"✅ Sloupec '{column_name}' úspěšně přidán do tabulky '{table}'.")
                 except Exception as e:
                     # Pokud sloupec již existuje, ignorovat chybu
                     if "already exists" in str(e) or "duplicate column" in str(e):
-                        results["success"].append(f"Sloupec '{column_name}' v tabulce '{table}' již existuje.")
+                        results["success"].append(f"☑️ Sloupec '{column_name}' v tabulce '{table}' již existuje.")
                     else:
-                        results["errors"].append(f"Chyba při přidávání sloupce '{column_name}': {e}")
+                        results["errors"].append(f"❌ Chyba při přidávání sloupce '{column_name}': {e}")
                     session.rollback() # Důležitý rollback po každé chybě
                     
         if not results["errors"]:
