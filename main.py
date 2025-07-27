@@ -3765,3 +3765,70 @@ def is_completion_signal(speech_text: str) -> bool:
     
     speech_lower = speech_text.lower().strip()
     return any(signal in speech_lower for signal in completion_signals)
+
+# --- NOVÉ SYSTÉMOVÉ ENDPOINTY ---
+@admin_router.get("/system/run-migrations", response_class=HTMLResponse, name="admin_run_migrations")
+def admin_run_migrations(request: Request):
+    """
+    Bezpečný endpoint pro jednorázové spuštění databázových migrací.
+    Přidává chybějící sloupce, které mohly vzniknout při vývoji.
+    """
+    session = SessionLocal()
+    results = {"success": [], "errors": []}
+    
+    migrations = {
+        "lessons": [
+            ("base_difficulty", "VARCHAR(20)", "medium"),
+        ]
+    }
+    
+    try:
+        for table, columns in migrations.items():
+            for column_name, column_type, default_value in columns:
+                try:
+                    # Zkusit přidat sloupec
+                    session.execute(text(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type} DEFAULT '{default_value}'"))
+                    session.commit()
+                    results["success"].append(f"Sloupec '{column_name}' úspěšně přidán do tabulky '{table}'.")
+                except Exception as e:
+                    # Pokud sloupec již existuje, ignorovat chybu
+                    if "already exists" in str(e) or "duplicate column" in str(e):
+                        results["success"].append(f"Sloupec '{column_name}' v tabulce '{table}' již existuje.")
+                    else:
+                        results["errors"].append(f"Chyba při přidávání sloupce '{column_name}': {e}")
+                    session.rollback() # Důležitý rollback po každé chybě
+                    
+        if not results["errors"]:
+            message = "Všechny migrace proběhly úspěšně!"
+        else:
+            message = "Některé migrace selhaly. Zkontrolujte logy."
+            
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": message,
+            "details": results,
+            "back_url": "/admin/dashboard",
+            "back_text": "Zpět na dashboard"
+        })
+
+    except Exception as e:
+        session.rollback()
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"Kritická chyba při migraci: {e}",
+            "back_url": "/admin/dashboard",
+            "back_text": "Zpět na dashboard"
+        })
+    finally:
+        session.close()
+
+
+@admin_router.get("/lessons/new", response_class=HTMLResponse, name="admin_new_lesson_get")
+def admin_new_lesson_get(request: Request):
+    form = {
+        "title": "", "language": "cs", "script": "", "questions": "",
+        "description": "", "lesson_number": "0", "lesson_type": "standard", "required_score": "90.0",
+        "title.errors": [], "language.errors": [], "script.errors": [], "questions.errors": [],
+        "description.errors": [], "lesson_number.errors": [], "lesson_type.errors": [], "required_score.errors": []
+    }
+    return templates.TemplateResponse("lessons/form.html", {"request": request, "lesson": None, "form": form})
