@@ -1911,9 +1911,9 @@ async def voice_handler(request: Request):
     )
     
     gather.say(
-        "Naslouchám...",
+        "Píp.",
         language="cs-CZ",
-        rate="0.9",
+        rate="0.8",
         voice="Google.cs-CZ-Standard-A"
     )
     
@@ -1921,7 +1921,7 @@ async def voice_handler(request: Request):
     response.say(
         "Nerozuměl jsem vám nebo jste neodpověděl. Zkuste mluvit jasně a výrazně.",
         language="cs-CZ",
-        rate="0.9",
+        rate="0.8",
         voice="Google.cs-CZ-Standard-A"
     )
     
@@ -2217,7 +2217,7 @@ async def process_speech(request: Request):
         response.say(
             "Nerozuměl jsem vaší odpovědi. Zkuste mluvit jasně nebo řekněte 'konec' pro ukončení.",
             language="cs-CZ",
-            rate="0.9",
+            rate="0.8",
             voice="Google.cs-CZ-Standard-A"
         )
         response.redirect('/voice/process?reminder=true')
@@ -2384,7 +2384,8 @@ Formát odpovědi: [FEEDBACK] [SKÓRE: XX%]"""
                 test_session.id, 
                 speech_result, 
                 float(current_score), 
-                clean_feedback
+                clean_feedback,
+                test_session.current_question_index  # Přidán chybějící parametr
             )
             
             if updated_session and updated_session.get('is_completed'):
