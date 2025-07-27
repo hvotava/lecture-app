@@ -16,7 +16,7 @@ class User(Base):
     current_lesson_level = mapped_column(Integer, nullable=False, default=0)  # OBNOVENO
     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     attempts = relationship("Attempt", back_populates="user")
-    # progress = relationship("UserProgress", back_populates="user")  # DOČASNĚ VYPNUTO
+    badges = relationship("UserBadge", back_populates="user")
 
 class Lesson(Base):
     __tablename__ = "lessons"
@@ -27,9 +27,10 @@ class Lesson(Base):
     script = mapped_column(Text, nullable=False, default="")  # Změněno na nullable=False s default
     questions = mapped_column(JSON, nullable=False)
     level = mapped_column(String(20), nullable=False, default="beginner")
-    lesson_number = mapped_column(Integer, nullable=False, default=0)  # Číslo lekce (0=vstupní test, 1+=běžné lekce)
-    required_score = mapped_column(Float, nullable=False, default=90.0)  # Požadované skóre pro úspěch
-    lesson_type = mapped_column(String(20), nullable=False, default="standard")  # Typ lekce (entry_test, standard, advanced)
+    base_difficulty = mapped_column(String(20), nullable=False, default="medium") # "easy", "medium", "hard"
+    lesson_number = mapped_column(Integer, nullable=False, default=0)
+    required_score = mapped_column(Float, nullable=False, default=90.0)
+    lesson_type = mapped_column(String(20), nullable=False, default="test")  # "test", "teaching", "scenario"
     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     attempts = relationship("Attempt", back_populates="lesson")
     
@@ -50,19 +51,56 @@ class Lesson(Base):
             "answer": next_question["answer"]
         }
 
-# class UserProgress(Base):  # DOČASNĚ VYPNUTO
-#     """Nový model pro sledování pokroku uživatele"""
-#     __tablename__ = "user_progress"
-#     id = mapped_column(Integer, primary_key=True)
-#     user_id = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-#     lesson_number = mapped_column(Integer, nullable=False)
-#     is_completed = mapped_column(Boolean, nullable=False, default=False)
-#     best_score = mapped_column(Float, nullable=True)
-#     attempts_count = mapped_column(Integer, nullable=False, default=0)
-#     first_completed_at = mapped_column(DateTime, nullable=True)
-#     last_attempt_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-#     created_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-#     user = relationship("User", back_populates="progress")
+class Badge(Base):
+    __tablename__ = "badges"
+    id = mapped_column(Integer, primary_key=True)
+    name = mapped_column(String(100), nullable=False, unique=True)
+    description = mapped_column(Text, nullable=False)
+    icon_svg = mapped_column(Text, nullable=True) # Ikonka jako SVG kód
+    category = mapped_column(String(50), nullable=False) # Kategorie, za kterou se odznak uděluje
+
+class UserBadge(Base):
+    __tablename__ = "user_badges"
+    id = mapped_column(Integer, primary_key=True)
+    user_id = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    badge_id = mapped_column(Integer, ForeignKey("badges.id"), nullable=False)
+    awarded_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="badges")
+    badge = relationship("Badge")
+
+class TestSession(Base):
+    """Model pro sledování průběhu testování"""
+    __tablename__ = "test_sessions" 
+    
+    id = mapped_column(Integer, primary_key=True)
+    user_id = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    lesson_id = mapped_column(Integer, ForeignKey("lessons.id"), nullable=False)
+    attempt_id = mapped_column(Integer, ForeignKey("attempts.id"), nullable=True)
+    
+    # Stav testování
+    current_question_index = mapped_column(Integer, nullable=False, default=0)
+    total_questions = mapped_column(Integer, nullable=False, default=0)
+    questions_data = mapped_column(JSON, nullable=False)
+    
+    # Adaptivní obtížnost a sledování chyb
+    difficulty_score = mapped_column(Float, nullable=False, default=50.0)
+    failed_categories = mapped_column(JSON, nullable=False, default=list)
+    
+    # Výsledky
+    answers = mapped_column(JSON, nullable=False, default=list)
+    scores = mapped_column(JSON, nullable=False, default=list)
+    current_score = mapped_column(Float, nullable=False, default=0.0)
+    
+    # Metadata
+    started_at = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = mapped_column(DateTime, nullable=True)
+    is_completed = mapped_column(Boolean, nullable=False, default=False)
+    
+    # Relationships
+    user = relationship("User")
+    lesson = relationship("Lesson")
+    attempt = relationship("Attempt")
 
 class Answer(Base):
     __tablename__ = "answers"

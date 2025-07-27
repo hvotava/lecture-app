@@ -450,7 +450,7 @@ class TwilioService:
         response = VoiceResponse()
         
         response.say(
-            f"Otázka: <break time=\"0.5s\"/> {question}",
+            f"Otázka: {question}",
             language=language,
             voice="Google.cs-CZ-Standard-A",
             rate="0.8"  # Pomalejší pro lepší srozumitelnost

@@ -26,7 +26,7 @@ def get_next_adaptive_question(test_session) -> Optional[dict]:
     else: # Je to TestSession objekt
         answered_indices = {a['question_index'] for a in (test_session.answers or [])}
         all_questions = test_session.questions_data
-        difficulty_score = test_session.difficulty_score or 50.0
+        difficulty_score = getattr(test_session, 'difficulty_score', 50.0) or 50.0
 
     unanswered_questions = [
         (idx, q) for idx, q in enumerate(all_questions) if idx not in answered_indices
@@ -72,10 +72,12 @@ def save_answer_and_advance_v2(test_session_id: int, user_answer: str, score: fl
         
         if score >= 80:
             adjustment = rules["score_adjustments"][q_difficulty]["correct"]
-            test_session.difficulty_score = (test_session.difficulty_score or 50.0) + adjustment
+            current_difficulty = getattr(test_session, 'difficulty_score', 50.0) or 50.0
+            test_session.difficulty_score = current_difficulty + adjustment
         else:
             adjustment = rules["score_adjustments"][q_difficulty]["incorrect"]
-            test_session.difficulty_score = (test_session.difficulty_score or 50.0) - adjustment
+            current_difficulty = getattr(test_session, 'difficulty_score', 50.0) or 50.0
+            test_session.difficulty_score = current_difficulty - adjustment
             
             # Sledování chybných kategorií s váhami
             category = current_question.get("category", "Neznámá")
@@ -92,8 +94,10 @@ def save_answer_and_advance_v2(test_session_id: int, user_answer: str, score: fl
             flag_modified(test_session, "failed_categories")
 
         # Omezení skóre v rozmezí 0-100
-        test_session.difficulty_score = max(0, min(100, test_session.difficulty_score))
-        logger.info(f"🧠 Adaptivní skóre: {test_session.difficulty_score:.2f} (Δ{adjustment:+.2f})")
+        current_difficulty = getattr(test_session, 'difficulty_score', 50.0) or 50.0
+        test_session.difficulty_score = max(0, min(100, current_difficulty))
+        final_difficulty = getattr(test_session, 'difficulty_score', 50.0) or 50.0
+        logger.info(f"🧠 Adaptivní skóre: {final_difficulty:.2f} (Δ{adjustment:+.2f})")
 
         # Uložení odpovědi s rozšířenými daty
         answer_data = {
@@ -153,7 +157,7 @@ def save_answer_and_advance_v2(test_session_id: int, user_answer: str, score: fl
             'is_completed': test_session.is_completed,
             'completed_at': test_session.completed_at,
             'failed_categories': test_session.failed_categories,
-            'difficulty_score': test_session.difficulty_score
+            'difficulty_score': getattr(test_session, 'difficulty_score', 50.0)
         }
             
     finally:
@@ -244,7 +248,7 @@ async def handle_entry_test_v2(session, current_user, speech_result, response, c
             user_answer=speech_result,
             question_category=current_question.get('category', 'Neznámá'),
             question_difficulty=current_question.get('difficulty', 'medium'),
-            user_difficulty_score=test_session.difficulty_score or 50.0,
+            user_difficulty_score=getattr(test_session, 'difficulty_score', 50.0) or 50.0,
             failed_categories=test_session.failed_categories or []
         )
         

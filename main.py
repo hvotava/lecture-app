@@ -2039,7 +2039,7 @@ async def process_speech(request: Request):
                 )
                 
                 gather.say(
-                    "Řekněte 'ano' pokud je to správně, <break time=\"0.4s\"/> nebo zopakujte vaši odpověď.",
+                    "Řekněte 'ano' pokud je to správně, nebo zopakujte vaši odpověď.",
                     language="cs-CZ",
                     rate="0.8",
                     voice="Google.cs-CZ-Standard-A"
@@ -2059,7 +2059,7 @@ async def process_speech(request: Request):
                 )
                 
                 gather.say(
-                    "Pokud chcete něco doplnit, <break time=\"0.4s\"/> pokračujte. <break time=\"0.5s\"/> Nebo řekněte 'hotovo' pokud je odpověď kompletní.",
+                    "Pokud chcete něco doplnit, pokračujte. Nebo řekněte 'hotovo' pokud je odpověď kompletní.",
                     language="cs-CZ",
                     rate="0.8",
                     voice="Google.cs-CZ-Standard-A"
@@ -2078,7 +2078,7 @@ async def process_speech(request: Request):
                 )
             
             response.say(
-                "Nerozuměl jsem vám. <break time=\"0.5s\"/> Zkuste to prosím znovu pomaleji.",
+                "Nerozuměl jsem vám. Zkuste to prosím znovu pomaleji.",
                 language="cs-CZ",
                 rate="0.8",
                 voice="Google.cs-CZ-Standard-A"
@@ -3854,27 +3854,11 @@ def should_ask_for_confirmation(speech_result: str, confidence_float: float, con
 
 def create_natural_speech_response(text: str, language: str = "cs-CZ", add_pauses: bool = True) -> str:
     """
-    Vytvoří přirozenější hlasovou odpověď s pauzami a lepším tempem.
+    Vrací čistý text bez SSML tagů - TwiML je nepodporuje správně.
+    Používáme pomalejší tempo řeči místo SSML pauz.
     """
-    if not add_pauses:
-        return text
-    
-    # Přidej pauzy po interpunkci pro přirozenější řeč
-    import re
-    
-    # Kratší pauzy po čárkách
-    text = re.sub(r',(\s+)', r', <break time="0.3s"/> ', text)
-    
-    # Delší pauzy po tečkách a otaznících
-    text = re.sub(r'[.!?](\s+)', r'. <break time="0.6s"/> ', text)
-    
-    # Pauza před "Další otázka"
-    text = re.sub(r'(Další otázka)', r'<break time="0.8s"/> \1', text)
-    
-    # Pauza po hodnocení před další částí
-    text = re.sub(r'(Správně|Dobře|Výborně|Bohužel|Částečně správně)([.!])', r'\1\2 <break time="0.5s"/>', text)
-    
-    return text
+    # Jednoduchý return bez jakýchkoliv SSML modifikací
+    return text.strip()
 
 
 def is_completion_signal(speech_text: str) -> bool:
