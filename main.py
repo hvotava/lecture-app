@@ -235,20 +235,56 @@ def admin_edit_user_post(request: Request, id: int = Path(...), name: str = Form
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
 @admin_router.post("/users/{user_id}/delete", name="admin_delete_user")
-def admin_delete_user(user_id: int = Path(...)):
+def admin_delete_user(request: Request, user_id: int = Path(...)):
     session = SessionLocal()
-    user = session.query(User).get(user_id)
-    if user:
-        try:
-            session.delete(user)
-            session.commit()
-        except Exception as e:
-            session.rollback()
-        finally:
-            session.close()
-    else:
+    try:
+        user = session.query(User).get(user_id)
+        if not user:
+            logger.warning(f"❌ Pokus o smazání neexistujícího uživatele ID: {user_id}")
+            return templates.TemplateResponse("message.html", {
+                "request": request,
+                "message": f"❌ Uživatel s ID {user_id} nebyl nalezen.",
+                "back_url": "/admin/users",
+                "back_text": "Zpět na uživatele"
+            })
+        
+        # Zkontroluj závislé záznamy
+        test_sessions_count = session.query(TestSession).filter(TestSession.user_id == user_id).count()
+        attempts_count = session.query(Attempt).filter(Attempt.user_id == user_id).count()
+        
+        if test_sessions_count > 0 or attempts_count > 0:
+            logger.warning(f"❌ Nelze smazat uživatele {user.name} (ID: {user_id}) - má {test_sessions_count} test sessions a {attempts_count} pokusů")
+            return templates.TemplateResponse("message.html", {
+                "request": request,
+                "message": f"❌ Nelze smazat uživatele '{user.name}'.\n\nUživatel má {test_sessions_count} aktivních testů a {attempts_count} pokusů.\nPro smazání nejprve odstraňte související záznamy.",
+                "back_url": "/admin/users",
+                "back_text": "Zpět na uživatele"
+            })
+        
+        # Smazání uživatele
+        user_name = user.name
+        session.delete(user)
+        session.commit()
+        
+        logger.info(f"✅ Uživatel '{user_name}' (ID: {user_id}) byl úspěšně smazán")
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"✅ Uživatel '{user_name}' byl úspěšně smazán.",
+            "back_url": "/admin/users",
+            "back_text": "Zpět na uživatele"
+        })
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"❌ Chyba při mazání uživatele ID {user_id}: {str(e)}")
+        return templates.TemplateResponse("message.html", {
+            "request": request,
+            "message": f"❌ Chyba při mazání uživatele: {str(e)}",
+            "back_url": "/admin/users",
+            "back_text": "Zpět na uživatele"
+        })
+    finally:
         session.close()
-    return RedirectResponse(url="/admin/users", status_code=status.HTTP_302_FOUND)
 
 @admin_router.post("/users/{user_id}/call", name="admin_call_user")
 def admin_call_user(user_id: int = Path(...)):

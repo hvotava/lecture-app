@@ -39,7 +39,7 @@
                             <form method="post" action="{{ url_for('admin_call_user', user_id=user.id) }}" style="display:inline;">
                                 <button type="submit" class="btn btn-sm btn-success">Zavolat</button>
                             </form>
-                            <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" style="display:inline;">
+                            <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" style="display:inline;" onsubmit="return confirm('Opravdu chcete smazat uživatele {{ user.name }}? Tato akce je nevratná!');">
                                 <button type="submit" class="btn btn-sm btn-danger">Smazat</button>
                             </form>
                         </td>
