@@ -3739,7 +3739,7 @@ def get_next_adaptive_question(test_session) -> Optional[dict]:
         # Bezpečnější přístup k potentially None 'answers'
         answered_indices = {a['question_index'] for a in (test_session.answers or [])}
         all_questions = test_session.questions_data
-        difficulty_score = test_session.difficulty_score
+        difficulty_score = getattr(test_session, 'difficulty_score', 50.0) or 50.0
 
     unanswered_questions = [
         (idx, q) for idx, q in enumerate(all_questions) if idx not in answered_indices
@@ -3783,10 +3783,12 @@ def save_answer_and_advance(test_session_id: int, user_answer: str, score: float
         
         if score >= 80:
             adjustment = (100 - q_difficulty_val) / 10
-            test_session.difficulty_score = (test_session.difficulty_score or 50.0) + adjustment
+            current_difficulty = getattr(test_session, 'difficulty_score', 50.0) or 50.0
+            test_session.difficulty_score = current_difficulty + adjustment
         else:
             adjustment = q_difficulty_val / 10
-            test_session.difficulty_score = (test_session.difficulty_score or 50.0) - adjustment
+            current_difficulty = getattr(test_session, 'difficulty_score', 50.0) or 50.0
+            test_session.difficulty_score = current_difficulty - adjustment
             
             category = current_question.get("category", "Neznámá")
             if not test_session.failed_categories:
@@ -3795,8 +3797,10 @@ def save_answer_and_advance(test_session_id: int, user_answer: str, score: float
                 test_session.failed_categories.append(category)
                 flag_modified(test_session, "failed_categories")
 
-        test_session.difficulty_score = max(0, min(100, test_session.difficulty_score))
-        logger.info(f"🧠 Nové skóre obtížnosti: {test_session.difficulty_score:.2f} (změna: {adjustment:.2f})")
+        current_difficulty = getattr(test_session, 'difficulty_score', 50.0) or 50.0
+        test_session.difficulty_score = max(0, min(100, current_difficulty))
+        final_difficulty = getattr(test_session, 'difficulty_score', 50.0) or 50.0
+        logger.info(f"🧠 Nové skóre obtížnosti: {final_difficulty:.2f} (změna: {adjustment:.2f})")
 
         answer_data = {
             "question": current_question.get("question", ""),
@@ -3836,7 +3840,7 @@ def save_answer_and_advance(test_session_id: int, user_answer: str, score: float
         return {
             # ... (zbytek logiky zůstává stejný)
             'failed_categories': test_session.failed_categories,
-            'difficulty_score': test_session.difficulty_score
+            'difficulty_score': getattr(test_session, 'difficulty_score', 50.0)
         }
             
     finally:
