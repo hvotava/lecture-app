@@ -222,12 +222,11 @@ async def handle_entry_test_v2(session, current_user, speech_result, response, c
             test_session.current_question_index = next_question['original_index']
             session.commit()
             
-            progress = f"({len(answered_indices) + 1}/{test_session.total_questions})"
             difficulty_indicator = {"easy": "⭐", "medium": "⭐⭐", "hard": "⭐⭐⭐"}.get(
                 next_question.get('difficulty', 'medium'), "⭐⭐"
             )
             
-            response.say(f"Otázka {progress} {difficulty_indicator}: {next_question.get('question', '')}", 
+            response.say(f"Otázka {difficulty_indicator}: {next_question.get('question', '')}", 
                         language="cs-CZ")
         else:
             response.say("Všechny otázky zodpovězeny.", language="cs-CZ")
@@ -319,13 +318,15 @@ async def handle_entry_test_v2(session, current_user, speech_result, response, c
                 ts.current_question_index = next_question['original_index']
                 session.commit()
                 
-                progress = f"({len(updated_session.get('answers', [])) + 1}/{updated_session.get('total_questions', 0)})"
                 difficulty_indicator = {"easy": "⭐", "medium": "⭐⭐", "hard": "⭐⭐⭐"}.get(
                     next_question.get('difficulty', 'medium'), "⭐⭐"
                 )
                 
-                next_text = f"{clean_feedback} Další otázka {progress} {difficulty_indicator}: {next_question.get('question', '')}"
-                response.say(next_text, language="cs-CZ", rate="0.9")
+                next_text = f"{clean_feedback} Další otázka {difficulty_indicator}: {next_question.get('question', '')}"
+                # Použij přirozenější pauzy - import funkce z main.py
+                from main import create_natural_speech_response
+                next_text_with_pauses = create_natural_speech_response(next_text)
+                response.say(next_text_with_pauses, language="cs-CZ", rate="0.8")
                 return True
             else:
                 response.say("Všechny otázky zodpovězeny. Test končí.", language="cs-CZ")

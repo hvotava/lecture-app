@@ -445,23 +445,25 @@ class TwilioService:
         
         return str(response)
     
-    def create_question_response(self, question: str, language: str = "cs-CZ") -> str:
+    def create_question_response(self, question: str, language: str = "cs-CZ", include_beep: bool = True) -> str:
         """Vytvoří TwiML odpověď s otázkou."""
         response = VoiceResponse()
         
         response.say(
-            f"Otázka: {question}",
+            f"Otázka: <break time=\"0.5s\"/> {question}",
             language=language,
             voice="Google.cs-CZ-Standard-A",
-            rate="0.9"
+            rate="0.8"  # Pomalejší pro lepší srozumitelnost
         )
         response.pause(length=1)
-        response.say(
-            "Píp.",
-            language=language,
-            voice="Google.cs-CZ-Standard-A",
-            rate="0.9"
-        )
+        
+        if include_beep:
+            response.say(
+                "Píp.",
+                language=language,
+                voice="Google.cs-CZ-Standard-A",
+                rate="0.8"
+            )
         
         # Připojení na Media Stream
         connect = Connect()
