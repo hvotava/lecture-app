@@ -34,7 +34,39 @@ from sqlalchemy.orm import relationship
 
 load_dotenv()
 
-app = FastAPI()
+# Základní konfigurace check - neblokuje startup
+try:
+    print("=== CONFIGURATION CHECK ===")
+    missing_vars = []
+    required_vars = ['DATABASE_URL', 'OPENAI_API_KEY']
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+            print(f"⚠️  Missing: {var}")
+        else:
+            print(f"✅ Found: {var}")
+    
+    if missing_vars:
+        print(f"⚠️  WARNING: {len(missing_vars)} environment variables missing")
+    else:
+        print("✅ All critical env vars present")
+    print("=== CONFIG CHECK COMPLETE ===")
+except Exception as e:
+    print(f"❌ Config check failed: {e}")
+
+app = FastAPI(title="Lecture App", version="1.0.0")
+
+# Startup event handler pro diagnostiku
+@app.on_event("startup")
+async def startup_event():
+    import sys
+    print("=== LECTURE APP STARTUP ===")
+    print(f"Python version: {sys.version}")
+    print(f"PORT env var: {os.getenv('PORT', 'NOT SET')}")
+    print(f"DATABASE_URL: {'SET' if os.getenv('DATABASE_URL') else 'NOT SET'}")
+    print(f"OPENAI_API_KEY: {'SET' if os.getenv('OPENAI_API_KEY') else 'NOT SET'}")
+    print(f"TWILIO_ACCOUNT_SID: {'SET' if os.getenv('TWILIO_ACCOUNT_SID') else 'NOT SET'}")
+    print("=== STARTUP COMPLETE ===")
 
 # CORS (pro případné admin rozhraní)
 app.add_middleware(
@@ -1703,8 +1735,24 @@ app.include_router(admin_router)
 logger = logging.getLogger("uvicorn")
 
 @app.get("/")
-def root():
-    return {"message": "Lecture App FastAPI běží!", "endpoints": ["/health", "/voice/", "/voice/media-stream"]}
+async def root():
+    """Health check endpoint - musí vracet 200 OK pro Railway health check"""
+    try:
+        return {
+            "status": "healthy",
+            "message": "Lecture App FastAPI běží!", 
+            "endpoints": ["/health", "/voice/", "/voice/media-stream"],
+            "port": os.getenv('PORT', '8080'),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        # I když jsou problémy, vracíme 200 pro health check
+        return {
+            "status": "partial",
+            "message": "App running with warnings",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.post("/")
 async def root_post(request: Request, attempt_id: str = Query(None)):
