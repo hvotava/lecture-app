@@ -4,7 +4,7 @@
     "builder": "DOCKERFILE"
   },
   "deploy": {
-    "startCommand": "sh -c 'uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --log-level info'",
+    "startCommand": "sh -c 'uvicorn main_minimal:app --host 0.0.0.0 --port ${PORT:-8000} --log-level info'",
     "healthcheckPath": "/",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",

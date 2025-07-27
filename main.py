@@ -16,7 +16,6 @@ from fastapi import Path
 import socket
 import requests
 from sqlalchemy import text
-import os
 from datetime import datetime
 from app.database import SessionLocal
 import base64
